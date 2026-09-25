@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runEval } from "../src/eval/runEval.js";
+import { Db } from "../src/lib/db.js";
 import type { AppConfig } from "../src/config/schema.js";
 
 function baseConfig(overrides: Partial<AppConfig["eval"]> = {}): AppConfig {
@@ -115,5 +116,22 @@ describe("runEval", () => {
     const modelB = report.perModel.find((m) => m.model === "model-b")!;
     expect(modelA.errorCount).toBe(1);
     expect(modelB.errorCount).toBe(0);
+  });
+
+  it("kirjoittaa eval_run- ja eval_result-rivit oikeassa järjestyksessä oikeaan tietokantaan", async () => {
+    const promptPath = writePromptSet([{ id: "p1", prompt: "Hei", expectedContains: "moi" }]);
+
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool
+      .intercept({ path: "/chat/completions", method: "POST" })
+      .reply(200, { model: "model-a", choices: [{ message: { content: "moi sinne" } }] });
+
+    const db = new Db(":memory:");
+    const report = await runEval(baseConfig(), { promptSetPath: promptPath, models: ["model-a"] }, db);
+
+    const rows = db.getEvalRunResults(report.runId) as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].model).toBe("model-a");
+    db.close();
   });
 });

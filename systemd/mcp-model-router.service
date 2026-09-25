@@ -11,7 +11,11 @@ WorkingDirectory=/opt/mcp-model-router
 EnvironmentFile=/opt/mcp-model-router/mcp-model-router.env
 Environment=MCP_TRANSPORT=http
 Environment=CONFIG_PATH=/opt/mcp-model-router/config.yaml
-ExecStart=/usr/bin/node /opt/mcp-model-router/dist/index.js
+# /usr/bin/env etsii node-binäärin systemd:n oletus-PATH:sta (kattaa sekä
+# NodeSourcen apt-asennuksen /usr/bin/node:iin että esim. /usr/local/bin:iin
+# asennetut versiot). Jos `which node` antaa jonkin muun polun (esim. nvm),
+# aseta ExecStart suoraan siihen poluun.
+ExecStart=/usr/bin/env node /opt/mcp-model-router/dist/index.js
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

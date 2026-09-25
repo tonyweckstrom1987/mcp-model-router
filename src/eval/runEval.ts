@@ -154,6 +154,10 @@ export async function runEval(config: AppConfig, input: RunEvalInput, db?: Db): 
   const judgeUsed = input.judge ?? config.eval.judge.enabled;
   const results: EvalCaseResult[] = [];
 
+  // eval_run täytyy olla tallessa ennen eval_result-rivejä, koska
+  // jälkimmäisillä on FOREIGN KEY -viittaus run_id:hin.
+  db?.insertEvalRun({ runId, promptSetPath: input.promptSetPath, models: input.models, judgeUsed });
+
   for (const model of input.models) {
     for (const testCase of cases) {
       const messages: ChatMessage[] = [];
@@ -206,8 +210,6 @@ export async function runEval(config: AppConfig, input: RunEvalInput, db?: Db): 
       }
     }
   }
-
-  db?.insertEvalRun({ runId, promptSetPath: input.promptSetPath, models: input.models, judgeUsed });
 
   return {
     runId,
