@@ -1,0 +1,24 @@
+[Unit]
+Description=mcp-model-router - MCP-palvelin mallien reititykseen, kulutukseen ja evaliin
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mcp-model-router
+Group=mcp-model-router
+WorkingDirectory=/opt/mcp-model-router
+EnvironmentFile=/opt/mcp-model-router/mcp-model-router.env
+Environment=MCP_TRANSPORT=http
+Environment=CONFIG_PATH=/opt/mcp-model-router/config.yaml
+ExecStart=/usr/bin/node /opt/mcp-model-router/dist/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/mcp-model-router/data
+
+[Install]
+WantedBy=multi-user.target

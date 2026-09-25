@@ -1,0 +1,70 @@
+# mcp-model-router - esimerkkiasetukset
+#
+# Kopioi tämä tiedosto nimelle config.yaml ja muokkaa tarpeen mukaan.
+# Tiedostossa ei ole salaisuuksia: avaimet luetaan ${MUUTTUJA}-viittauksilla
+# ympäristömuuttujista käynnistyshetkellä. ${MUUTTUJA:-oletus}-muoto asettaa
+# oletusarvon, jos muuttujaa ei ole asetettu.
+
+server:
+  name: mcp-model-router
+  version: "0.1.0"
+
+# OpenAI-yhteensopiva rajapinta, jota kaikki mallikutsut käyttävät.
+# Osoita tämä LiteLLM-proxyyn (suositus) tai suoraan OpenRouteriin.
+# Ei koskaan suoria Anthropic-kutsuja - reititin puhuu vain tälle yhdelle
+# OpenAI-yhteensopivalle rajapinnalle.
+provider:
+  baseUrl: ${LLM_BASE_URL:-http://localhost:4000}
+  apiKey: ${LLM_API_KEY:-}
+  timeoutMs: 60000
+
+# Tehtävätyyppi -> malli. Jokainen tehtävätyyppi voi määritellä varamallin,
+# jota käytetään jos päämalli epäonnistuu.
+tasks:
+  general:
+    model: openrouter/anthropic/claude-3.5-haiku
+    fallbackModel: openrouter/meta-llama/llama-3.1-8b-instruct
+    systemPrompt: "Olet avulias yleiskäyttöinen assistentti."
+
+  code:
+    model: openrouter/anthropic/claude-3.5-sonnet
+    fallbackModel: openrouter/deepseek/deepseek-chat
+    systemPrompt: "Olet kokenut ohjelmistokehittäjä. Vastaa täsmällisesti ja perustele ratkaisut lyhyesti."
+
+  writing:
+    model: openrouter/anthropic/claude-3.5-sonnet
+    fallbackModel: openrouter/openai/gpt-4o-mini
+    systemPrompt: "Olet taitava kirjoittaja ja editoija."
+
+  orchestration:
+    model: openrouter/openai/gpt-4o
+    fallbackModel: openrouter/anthropic/claude-3.5-sonnet
+    systemPrompt: "Olet agenttien orkestroija: pilko tehtävä osiin ja delegoi selkeästi."
+
+# Kulutuksen ja budjetin luku - ei omaa kirjanpitoa, luetaan suoraan
+# LiteLLM:n tai OpenRouterin rajapinnasta.
+usage:
+  provider: litellm # litellm | openrouter
+  baseUrl: ${USAGE_BASE_URL:-http://localhost:4000}
+  apiKey: ${USAGE_API_KEY:-}
+
+# run_eval-työkalun asetukset.
+eval:
+  judge:
+    enabled: false
+    model: openrouter/openai/gpt-4o-mini
+    systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
+  # Valinnainen hinnasto $/miljoona tokenia eval-raportin hinta-arviota
+  # varten (LiteLLM/OpenRouter näyttävät jo toteutuneen kulutuksen -
+  # tämä on vain vertailua varten eval-ajon sisällä).
+  pricing:
+    openrouter/anthropic/claude-3.5-sonnet:
+      inputPerMillionUsd: 3.0
+      outputPerMillionUsd: 15.0
+    openrouter/anthropic/claude-3.5-haiku:
+      inputPerMillionUsd: 0.8
+      outputPerMillionUsd: 4.0
+
+# SQLite vain kutsulokille ja eval-tuloksille - ei kulutuksen kirjanpitoa.
+database:
+  path: ${DB_PATH:-./data/mcp-model-router.sqlite}

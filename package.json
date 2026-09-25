@@ -1,0 +1,45 @@
+{
+  "name": "mcp-model-router",
+  "version": "0.1.0",
+  "description": "MCP-palvelin, joka valitsee mallin tehtävätyypin mukaan, näyttää LiteLLM/OpenRouter-kulutuksen ja vertailee malleja eval-ajoilla. Täydentää LiteLLM:ää, ei korvaa sitä.",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "mcp-model-router": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "config.example.yaml"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "start:http": "MCP_TRANSPORT=http node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.1",
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2",
+    "js-yaml": "^4.1.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/express": "^4.17.21",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "undici": "^7.2.0",
+    "vitest": "^2.1.8"
+  }
+}
