@@ -51,7 +51,7 @@ kulutuksen tai budjetin kirjanpitoon.
 
 ## Asennus
 
-Vaatii Node.js 20 tai 22.
+Vaatii Node.js 20, 22 tai 24.
 
 ```bash
 npm install
@@ -208,7 +208,7 @@ klienttisi dokumentaatio.
 
 Ei Dockeria - palvelin ajetaan suoraan Node-prosessina systemd-yksikkönä.
 
-1. Luo (tai käytä) Debian/Ubuntu-pohjainen LXC-kontti, asenna Node.js 20/22.
+1. Luo (tai käytä) Debian/Ubuntu-pohjainen LXC-kontti, asenna Node.js 20, 22 tai 24.
 2. Kloonaa repo `/opt/mcp-model-router`-hakemistoon ja aja:
    ```bash
    cd /opt/mcp-model-router
