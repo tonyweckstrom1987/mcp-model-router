@@ -9,7 +9,7 @@ import type { AppConfig } from "../src/config/schema.js";
 function baseConfig(overrides: Partial<AppConfig["eval"]> = {}): AppConfig {
   return {
     server: { name: "test", version: "0.0.0" },
-    provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000 },
+    provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000, kind: "litellm" },
     tasks: { general: { model: "m1" } },
     usage: { provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "" },
     eval: { judge: { enabled: false }, pricing: {}, ...overrides },

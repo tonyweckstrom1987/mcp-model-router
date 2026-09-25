@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { AppConfig } from "../config/schema.js";
 import { callChatCompletion, type ChatMessage } from "../lib/openaiClient.js";
+import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
 
 const EvalPromptCaseSchema = z.object({
@@ -87,7 +88,7 @@ async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, respon
     const result = await callChatCompletion({
       baseUrl: config.provider.baseUrl,
       apiKey: config.provider.apiKey,
-      model: judgeModel,
+      model: resolveModelId(config.provider, judgeModel),
       timeoutMs: config.provider.timeoutMs,
       messages: [
         { role: "system", content: system },
@@ -164,7 +165,7 @@ export async function runEval(config: AppConfig, input: RunEvalInput, db?: Db): 
         const result = await callChatCompletion({
           baseUrl: config.provider.baseUrl,
           apiKey: config.provider.apiKey,
-          model,
+          model: resolveModelId(config.provider, model),
           messages,
           timeoutMs: config.provider.timeoutMs,
         });

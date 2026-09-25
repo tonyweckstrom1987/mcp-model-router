@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config/schema.js";
 import { callChatCompletion, type ChatMessage } from "../lib/openaiClient.js";
+import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
 
 export interface RouteAndCompleteInput {
@@ -57,7 +58,7 @@ export async function routeAndComplete(
   };
 
   try {
-    const result = await callChatCompletion({ ...callOpts, model: route.model });
+    const result = await callChatCompletion({ ...callOpts, model: resolveModelId(config.provider, route.model) });
     const latencyMs = Date.now() - start;
     db?.insertCallLog({
       taskType: input.taskType,
@@ -96,7 +97,7 @@ export async function routeAndComplete(
     usedFallback = true;
   }
 
-  const result = await callChatCompletion({ ...callOpts, model: route.fallbackModel! });
+  const result = await callChatCompletion({ ...callOpts, model: resolveModelId(config.provider, route.fallbackModel!) });
   const latencyMs = Date.now() - start;
   db?.insertCallLog({
     taskType: input.taskType,

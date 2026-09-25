@@ -15,6 +15,9 @@ export const ProviderConfigSchema = z.object({
   baseUrl: z.string().url("provider.baseUrl täytyy olla kelvollinen URL"),
   apiKey: z.string().optional().default(""),
   timeoutMs: z.number().int().positive().default(60_000),
+  // Vaikuttaa siihen, karsitaanko "openrouter/"-etuliite mallitunnisteesta
+  // ennen rajapintakutsua - ks. src/lib/modelId.ts.
+  kind: z.enum(["litellm", "openrouter"]).default("litellm"),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 

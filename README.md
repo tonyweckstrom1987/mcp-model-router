@@ -65,6 +65,7 @@ Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
 |---------------------|----------------------------------------------------------------|----------------------------|
 | `LLM_BASE_URL`      | OpenAI-yhteensopivan rajapinnan base URL                       | `http://localhost:4000`   |
 | `LLM_API_KEY`       | Avain edelliseen rajapintaan                                   | (tyhjä)                   |
+| `LLM_PROVIDER_KIND` | `litellm` tai `openrouter` - katso [Mallitunnisteet: LiteLLM vs. suora OpenRouter](#mallitunnisteet-litellm-vs-suora-openrouter) | `litellm` |
 | `USAGE_BASE_URL`    | Kulutusrajapinnan base URL (yleensä sama kuin `LLM_BASE_URL`)   | `http://localhost:4000`   |
 | `USAGE_API_KEY`     | Avain kulutusrajapintaan                                       | (tyhjä)                   |
 | `CONFIG_PATH`       | Polku `config.yaml`-tiedostoon                                 | `config.yaml`              |
@@ -87,6 +88,25 @@ MCP_TRANSPORT=http MCP_HTTP_HOST=0.0.0.0 MCP_HTTP_PORT=3000 npm start
 HTTP-tilassa palvelin vastaa osoitteessa `http://<host>:<port>/mcp` ja
 tarjoaa lisäksi `GET /healthz` -terveystarkastuksen.
 
+### Nopea kokeilu
+
+Kolmella komennolla ensimmäinen `route_and_complete`-kutsu toimimaan
+paikallista LiteLLM-proxyä vasten (oleta, että LiteLLM pyörii jo
+osoitteessa `http://localhost:4000` ja siinä on ainakin `general`-tehtävän
+malli konfiguroitu):
+
+```bash
+npm install && npm run build
+cp config.example.yaml config.yaml
+
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}' \
+  | LLM_BASE_URL=http://localhost:4000 LLM_API_KEY=sk-... node dist/index.js
+```
+
+Kolmas komento käynnistää palvelimen stdio-siirtotavalla, syöttää sille
+yhden `tools/call`-pyynnön stdinistä ja tulostaa vastauksen. HTTP-tilassa
+vastaava kutsu tehdään `curl`illa `/mcp`-osoitteeseen (ks. [Ajaminen](#ajaminen)).
+
 ## config.yaml-esimerkki
 
 Ks. koko esimerkki tiedostossa [`config.example.yaml`](./config.example.yaml).
@@ -96,14 +116,15 @@ Tiivistettynä:
 provider:
   baseUrl: ${LLM_BASE_URL:-http://localhost:4000}
   apiKey: ${LLM_API_KEY:-}
+  kind: ${LLM_PROVIDER_KIND:-litellm}   # litellm | openrouter
 
 tasks:
   general:
-    model: openrouter/anthropic/claude-3.5-haiku
-    fallbackModel: openrouter/meta-llama/llama-3.1-8b-instruct
+    model: openrouter/deepseek/deepseek-v4.1-flash
+    fallbackModel: openrouter/qwen/qwen3-flash
   code:
-    model: openrouter/anthropic/claude-3.5-sonnet
-    fallbackModel: openrouter/deepseek/deepseek-chat
+    model: openrouter/qwen/qwen3-coder
+    fallbackModel: openrouter/deepseek/deepseek-v4.1-flash
 
 usage:
   provider: litellm   # litellm | openrouter
@@ -115,13 +136,28 @@ eval:
     enabled: false
     model: openrouter/openai/gpt-4o-mini
   pricing:
-    openrouter/anthropic/claude-3.5-sonnet:
-      inputPerMillionUsd: 3.0
-      outputPerMillionUsd: 15.0
+    openrouter/deepseek/deepseek-v4.1-flash:
+      inputPerMillionUsd: 0.2
+      outputPerMillionUsd: 0.8
 
 database:
   path: ${DB_PATH:-./data/mcp-model-router.sqlite}
 ```
+
+### Mallitunnisteet: LiteLLM vs. suora OpenRouter
+
+`tasks`-lohkon mallitunnisteet kirjoitetaan aina LiteLLM:n käyttämässä
+muodossa, esim. `openrouter/deepseek/deepseek-v4.1-flash`. `openrouter/`-
+etuliite on LiteLLM:n oma tapa kertoa, että pyyntö reititetään OpenRouterin
+kautta - se ei ole osa OpenRouterin omaa mallitunnistetta.
+
+- **`provider.kind: litellm`** (oletus, `LLM_BASE_URL` osoittaa LiteLLM-
+  proxyyn): tunniste lähetetään sellaisenaan, etuliite mukaan lukien.
+- **`provider.kind: openrouter`** (`LLM_BASE_URL` osoittaa suoraan
+  `https://openrouter.ai/api/v1`): reititin karsii `openrouter/`-etuliitteen
+  automaattisesti ennen rajapintakutsua (ks. `src/lib/modelId.ts`), joten
+  sama `config.yaml` toimii sellaisenaan molemmilla - vain
+  `LLM_BASE_URL`/`LLM_PROVIDER_KIND` vaihtuvat.
 
 ## MCP-työkalut
 

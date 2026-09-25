@@ -6,7 +6,7 @@ import type { AppConfig } from "../src/config/schema.js";
 function baseConfig(): AppConfig {
   return {
     server: { name: "test", version: "0.0.0" },
-    provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000 },
+    provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000, kind: "litellm" },
     tasks: {
       general: { model: "primary-model", fallbackModel: "fallback-model" },
       code: { model: "code-model" },
@@ -71,5 +71,24 @@ describe("routeAndComplete", () => {
     await expect(routeAndComplete(baseConfig(), { taskType: "ei-olemassa", prompt: "moi" })).rejects.toThrow(
       /Tuntematon tehtävätyyppi/,
     );
+  });
+
+  it("karsii openrouter/-etuliitteen mallitunnisteesta kun provider.kind on openrouter", async () => {
+    const config = baseConfig();
+    config.provider.kind = "openrouter";
+    config.tasks.general = { model: "openrouter/deepseek/deepseek-v4.1-flash" };
+
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool
+      .intercept({
+        path: "/chat/completions",
+        method: "POST",
+        body: (body) => JSON.parse(body).model === "deepseek/deepseek-v4.1-flash",
+      })
+      .reply(200, { model: "deepseek/deepseek-v4.1-flash", choices: [{ message: { content: "vastaus" } }] });
+
+    const result = await routeAndComplete(config, { taskType: "general", prompt: "moi" });
+
+    expect(result.text).toBe("vastaus");
   });
 });
