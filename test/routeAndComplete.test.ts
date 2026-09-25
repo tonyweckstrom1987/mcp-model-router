@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from "undici";
 import { routeAndComplete } from "../src/router/routeAndComplete.js";
+import { Db } from "../src/lib/db.js";
 import type { AppConfig } from "../src/config/schema.js";
 
 function baseConfig(): AppConfig {
@@ -90,5 +91,20 @@ describe("routeAndComplete", () => {
     const result = await routeAndComplete(config, { taskType: "general", prompt: "moi" });
 
     expect(result.text).toBe("vastaus");
+  });
+
+  it("kirjoittaa kutsulokin oikeaan tietokantaan", async () => {
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool
+      .intercept({ path: "/chat/completions", method: "POST" })
+      .reply(200, { model: "primary-model", choices: [{ message: { content: "vastaus" } }] });
+
+    const db = new Db(":memory:");
+    await routeAndComplete(baseConfig(), { taskType: "general", prompt: "moi" }, db);
+
+    const rows = db.listRecentCallLogs(10) as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].model_used).toBe("primary-model");
+    db.close();
   });
 });
