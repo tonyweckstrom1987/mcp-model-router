@@ -1,0 +1,90 @@
+# mcp-model-router - esimerkkiasetukset
+#
+# Kopioi tämä tiedosto nimelle config.yaml ja muokkaa tarpeen mukaan.
+# Tiedostossa ei ole salaisuuksia: avaimet luetaan ${MUUTTUJA}-viittauksilla
+# ympäristömuuttujista käynnistyshetkellä. ${MUUTTUJA:-oletus}-muoto asettaa
+# oletusarvon, jos muuttujaa ei ole asetettu.
+
+server:
+  name: mcp-model-router
+  version: "0.1.0"
+
+# OpenAI-yhteensopiva rajapinta, jota kaikki mallikutsut käyttävät.
+# Osoita tämä LiteLLM-proxyyn (suositus) tai suoraan OpenRouteriin.
+# Ei koskaan suoria Anthropic-kutsuja - reititin puhuu vain tälle yhdelle
+# OpenAI-yhteensopivalle rajapinnalle.
+#
+# provider.kind kertoo, miten alla olevien tasks-lohkon mallitunnisteet
+# tulkitaan:
+#   - "litellm" (oletus): baseUrl osoittaa LiteLLM-proxyyn. Mallitunniste
+#     lähetetään sellaisenaan, esim. "openrouter/deepseek/deepseek-v4.1-flash"
+#     - "openrouter/"-etuliite on LiteLLM:n oma tapa kertoa, että pyyntö
+#     reititetään OpenRouterin kautta.
+#   - "openrouter": baseUrl osoittaa suoraan OpenRouteriin
+#     (https://openrouter.ai/api/v1). OpenRouterin oma API ei tunne
+#     "openrouter/"-etuliitettä, joten reititin karsii sen automaattisesti
+#     ennen kutsua (ks. src/lib/modelId.ts) - tasks-lohkon mallitunnisteet
+#     voi siis kirjoittaa aina samassa "openrouter/vendor/malli"-muodossa
+#     riippumatta kummasta rajapinnasta on kyse, ja config pysyy siirrettävänä
+#     LiteLLM:n ja suoran OpenRouterin välillä.
+provider:
+  baseUrl: ${LLM_BASE_URL:-http://localhost:4000}
+  apiKey: ${LLM_API_KEY:-}
+  timeoutMs: 60000
+  kind: ${LLM_PROVIDER_KIND:-litellm} # litellm | openrouter
+
+# Tehtävätyyppi -> malli. Jokainen tehtävätyyppi voi määritellä varamallin,
+# jota käytetään jos päämalli epäonnistuu. Alla olevat mallitunnisteet ovat
+# esimerkkejä - tarkista tarkat, ajantasaiset tunnisteet omasta LiteLLM- tai
+# OpenRouter-mallilistastasi.
+tasks:
+  general:
+    model: openrouter/deepseek/deepseek-v4.1-flash
+    fallbackModel: openrouter/qwen/qwen3-flash
+    systemPrompt: "Olet avulias yleiskäyttöinen assistentti."
+
+  code:
+    model: openrouter/qwen/qwen3-coder
+    fallbackModel: openrouter/deepseek/deepseek-v4.1-flash
+    systemPrompt: "Olet kokenut ohjelmistokehittäjä. Vastaa täsmällisesti ja perustele ratkaisut lyhyesti."
+
+  writing:
+    model: openrouter/anthropic/claude-3.5-sonnet
+    fallbackModel: openrouter/openai/gpt-4o-mini
+    systemPrompt: "Olet taitava kirjoittaja ja editoija."
+
+  orchestration:
+    model: openrouter/openai/gpt-4o
+    fallbackModel: openrouter/anthropic/claude-3.5-sonnet
+    systemPrompt: "Olet agenttien orkestroija: pilko tehtävä osiin ja delegoi selkeästi."
+
+# Kulutuksen ja budjetin luku - ei omaa kirjanpitoa, luetaan suoraan
+# LiteLLM:n tai OpenRouterin rajapinnasta.
+usage:
+  provider: litellm # litellm | openrouter
+  baseUrl: ${USAGE_BASE_URL:-http://localhost:4000}
+  apiKey: ${USAGE_API_KEY:-}
+
+# run_eval-työkalun asetukset.
+eval:
+  judge:
+    enabled: false
+    model: openrouter/openai/gpt-4o-mini
+    systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
+  # Valinnainen hinnasto $/miljoona tokenia eval-raportin hinta-arviota
+  # varten (LiteLLM/OpenRouter näyttävät jo toteutuneen kulutuksen -
+  # tämä on vain vertailua varten eval-ajon sisällä).
+  pricing:
+    openrouter/deepseek/deepseek-v4.1-flash:
+      inputPerMillionUsd: 0.2
+      outputPerMillionUsd: 0.8
+    openrouter/qwen/qwen3-coder:
+      inputPerMillionUsd: 0.3
+      outputPerMillionUsd: 1.2
+    openrouter/anthropic/claude-3.5-sonnet:
+      inputPerMillionUsd: 3.0
+      outputPerMillionUsd: 15.0
+
+# SQLite vain kutsulokille ja eval-tuloksille - ei kulutuksen kirjanpitoa.
+database:
+  path: ${DB_PATH:-./data/mcp-model-router.sqlite}

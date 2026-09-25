@@ -1,0 +1,18 @@
+[
+  {
+    "id": "capital-of-finland",
+    "prompt": "Mikä on Suomen pääkaupunki? Vastaa yhdellä sanalla.",
+    "expectedContains": "Helsinki"
+  },
+  {
+    "id": "sum-numbers",
+    "systemPrompt": "Vastaa vain lopputuloksella, ei välivaiheilla.",
+    "prompt": "Laske 17 + 25.",
+    "expectedContains": "42"
+  },
+  {
+    "id": "fibonacci-typescript",
+    "prompt": "Kirjoita TypeScript-funktio, joka palauttaa n:nnen Fibonacci-luvun.",
+    "expectedContains": "function"
+  }
+]
