@@ -73,6 +73,24 @@ usage:
     expect(() => loadConfig({ configPath: path, env: {} })).toThrow(/tasks/);
   });
 
+  it("lukee tehtävätyyppikohtaisen timeoutMs:n, joka on oletuksena määrittelemätön", () => {
+    const path = writeConfig(`
+provider:
+  baseUrl: http://localhost:4000
+tasks:
+  general:
+    model: some-model
+  orchestration:
+    model: some-other-model
+    timeoutMs: 180000
+usage:
+  baseUrl: http://localhost:4000
+`);
+    const config = loadConfig({ configPath: path, env: {} });
+    expect(config.tasks.general.timeoutMs).toBeUndefined();
+    expect(config.tasks.orchestration.timeoutMs).toBe(180_000);
+  });
+
   it("resolvoi ympäristömuuttujat ennen validointia", () => {
     const path = writeConfig(`
 provider:

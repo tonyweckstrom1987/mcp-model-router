@@ -52,7 +52,9 @@ export async function routeAndComplete(
     baseUrl: config.provider.baseUrl,
     apiKey: config.provider.apiKey,
     messages,
-    timeoutMs: config.provider.timeoutMs,
+    // Tehtävätyypin oma timeoutMs (config.yaml: tasks.<taskType>.timeoutMs)
+    // ohittaa provider.timeoutMs:n, jos se on määritelty.
+    timeoutMs: route.timeoutMs ?? config.provider.timeoutMs,
     temperature: input.temperature,
     maxTokens: input.maxTokens,
   };

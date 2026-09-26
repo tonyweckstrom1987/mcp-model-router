@@ -157,11 +157,31 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
           ].filter(Boolean);
           return `- ${parts.join(" | ")}`;
         });
+
+        const taskTypeLines = report.perTaskType.map((t) => {
+          const parts = [
+            `${t.taskType} / ${t.model}:`,
+            `läpäisty ${t.passedCount}/${t.expectedCount}`,
+            `virheitä ${t.errorCount}/${t.caseCount}`,
+            `viive ka. ${t.avgLatencyMs.toFixed(0)} ms`,
+            t.avgPriceUsd !== null ? `hinta ka. ${t.avgPriceUsd.toFixed(6)} USD` : null,
+            t.passRateIncludingErrors !== null ? `läpäisy% (virheet mukana) ${(t.passRateIncludingErrors * 100).toFixed(0)}%` : null,
+            t.passRateExcludingErrors !== null ? `läpäisy% (virheet pois) ${(t.passRateExcludingErrors * 100).toFixed(0)}%` : null,
+          ].filter(Boolean);
+          return `- ${parts.join(" | ")}`;
+        });
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `Eval-ajo ${report.runId} (${report.cases.length} vastausta, tuomari ${report.judgeUsed ? "käytössä" : "pois päältä"}):\n${summaryLines.join("\n")}`,
+              text: [
+                `Eval-ajo ${report.runId} (${report.cases.length} vastausta, tuomari ${report.judgeUsed ? "käytössä" : "pois päältä"}):`,
+                summaryLines.join("\n"),
+                "",
+                "Tehtävätyypeittäin:",
+                taskTypeLines.join("\n"),
+              ].join("\n"),
             },
           ],
           structuredContent: report as unknown as Record<string, unknown>,

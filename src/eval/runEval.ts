@@ -53,6 +53,35 @@ export interface EvalModelSummary {
   caseCount: number;
 }
 
+/**
+ * Yhteenveto yhdelle (malli, tehtävätyyppi) -parille. Tehtävätyyppi
+ * pääteltään promptId:n etuliitteestä (ks. taskTypeFromPromptId), esim.
+ * 'yleinen-01' -> 'yleinen'.
+ *
+ * Läpäisyprosentti lasketaan kahdella tavalla, koska virheet (esim.
+ * aikakatkaisu) ja epäonnistunut avainsanatarkistus ovat eri asioita:
+ * - passRateIncludingErrors: virheelliset kutsut lasketaan
+ *   läpäisemättömiksi (nimittäjässä mukana) - kertoo tehtävätyypin
+ *   kokonaisluotettavuuden.
+ * - passRateExcludingErrors: virheelliset kutsut jätetään kokonaan pois
+ *   sekä osoittajasta että nimittäjästä - kertoo vastauksen laadun niiden
+ *   kutsujen joukossa, jotka ylipäätään saivat vastauksen.
+ */
+export interface EvalTaskTypeSummary {
+  taskType: string;
+  model: string;
+  caseCount: number;
+  errorCount: number;
+  avgLatencyMs: number;
+  avgPriceUsd: number | null;
+  // Läpäisseiden tapausten määrä
+  passedCount: number;
+  // Tapaukset, joissa expectedContains oli annettu (= läpäisyn "n")
+  expectedCount: number;
+  passRateIncludingErrors: number | null;
+  passRateExcludingErrors: number | null;
+}
+
 export interface EvalReport {
   runId: string;
   promptSetPath: string;
@@ -60,6 +89,16 @@ export interface EvalReport {
   judgeUsed: boolean;
   cases: EvalCaseResult[];
   perModel: EvalModelSummary[];
+  perTaskType: EvalTaskTypeSummary[];
+}
+
+/**
+ * Päättelee tehtävätyypin promptId:n etuliitteestä pudottamalla lopusta
+ * '-<numero>'-pääte, esim. 'yleinen-01' -> 'yleinen'. Jos promptId:ssä ei
+ * ole numeropäätettä, koko id toimii omana tehtävätyyppinään.
+ */
+export function taskTypeFromPromptId(promptId: string): string {
+  return promptId.replace(/-\d+$/, "");
 }
 
 export interface RunEvalInput {
@@ -143,6 +182,47 @@ function summarizePerModel(models: string[], results: EvalCaseResult[]): EvalMod
   });
 }
 
+function summarizePerTaskType(models: string[], cases: EvalPromptCase[], results: EvalCaseResult[]): EvalTaskTypeSummary[] {
+  const expectedByPromptId = new Map(cases.map((c) => [c.id, c.expectedContains !== undefined]));
+  const taskTypes = Array.from(new Set(cases.map((c) => taskTypeFromPromptId(c.id))));
+
+  const summaries: EvalTaskTypeSummary[] = [];
+  for (const model of models) {
+    for (const taskType of taskTypes) {
+      const rows = results.filter((r) => r.model === model && taskTypeFromPromptId(r.promptId) === taskType);
+      if (rows.length === 0) continue;
+
+      const latencies = rows.map((r) => r.latencyMs);
+      const avgLatencyMs = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+
+      const withPrice = rows.filter((r) => r.priceUsd !== null) as Array<EvalCaseResult & { priceUsd: number }>;
+      const avgPriceUsd = withPrice.length ? withPrice.reduce((a, b) => a + b.priceUsd, 0) / withPrice.length : null;
+
+      const errorCount = rows.filter((r) => r.error !== null).length;
+      const expectedRows = rows.filter((r) => expectedByPromptId.get(r.promptId));
+      const passedCount = expectedRows.filter((r) => r.passed === true).length;
+
+      const nonErroredExpectedCount = expectedRows.filter((r) => r.error === null).length;
+      const passRateExcludingErrors = nonErroredExpectedCount ? passedCount / nonErroredExpectedCount : null;
+      const passRateIncludingErrors = expectedRows.length ? passedCount / expectedRows.length : null;
+
+      summaries.push({
+        taskType,
+        model,
+        caseCount: rows.length,
+        errorCount,
+        avgLatencyMs,
+        avgPriceUsd,
+        passedCount,
+        expectedCount: expectedRows.length,
+        passRateIncludingErrors,
+        passRateExcludingErrors,
+      });
+    }
+  }
+  return summaries;
+}
+
 /**
  * Ajaa saman prompt-sarjan usealla mallilla ja raportoi hinnan, viiveen ja
  * vastauksen rinnakkain. Laatu arvioidaan yksinkertaisella
@@ -218,5 +298,6 @@ export async function runEval(config: AppConfig, input: RunEvalInput, db?: Db): 
     judgeUsed,
     cases: results,
     perModel: summarizePerModel(input.models, results),
+    perTaskType: summarizePerTaskType(input.models, cases, results),
   };
 }
