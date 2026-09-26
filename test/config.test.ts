@@ -91,6 +91,35 @@ usage:
     expect(config.tasks.orchestration.timeoutMs).toBe(180_000);
   });
 
+  it("eval.concurrency:n oletusarvo on 4, kun sitä ei ole asetettu", () => {
+    const path = writeConfig(`
+provider:
+  baseUrl: http://localhost:4000
+tasks:
+  general:
+    model: some-model
+usage:
+  baseUrl: http://localhost:4000
+`);
+    const config = loadConfig({ configPath: path, env: {} });
+    expect(config.eval.concurrency).toBe(4);
+  });
+
+  it("hylkää eval.concurrency:n arvon alle 1", () => {
+    const path = writeConfig(`
+provider:
+  baseUrl: http://localhost:4000
+tasks:
+  general:
+    model: some-model
+usage:
+  baseUrl: http://localhost:4000
+eval:
+  concurrency: 0
+`);
+    expect(() => loadConfig({ configPath: path, env: {} })).toThrow(/concurrency/);
+  });
+
   it("resolvoi ympäristömuuttujat ennen validointia", () => {
     const path = writeConfig(`
 provider:

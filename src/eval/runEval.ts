@@ -108,6 +108,33 @@ export interface RunEvalInput {
   runId?: string;
 }
 
+/**
+ * Ajaa `items`-listan läpi enintään `concurrency` kutsua kerrallaan, ilman
+ * ulkoisia riippuvuuksia. Kukin "worker" nostaa jonosta seuraavan
+ * käsittelemättömän indeksin (`nextIndex`) ja kirjoittaa tuloksensa suoraan
+ * omaan paikkaansa `results`-taulukossa - näin lopputulos säilyttää saman
+ * järjestyksen kuin `items`, vaikka kutsut valmistuisivat eri järjestyksessä.
+ * Yhden kutsun virhe (esim. aikakatkaisu) ei saa katkaista muita - se on
+ * `worker`-funktion vastuulla (ks. runEval: try/catch jokaisen kutsun
+ * ympärillä).
+ */
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  }
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length) || 1;
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
+  return results;
+}
+
 async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, responseText: string): Promise<number | null> {
   const judgeModel = config.eval.judge.model;
   if (!judgeModel) return null;
@@ -232,64 +259,68 @@ export async function runEval(config: AppConfig, input: RunEvalInput, db?: Db): 
   const cases = loadPromptSet(input.promptSetPath);
   const runId = input.runId ?? randomUUID();
   const judgeUsed = input.judge ?? config.eval.judge.enabled;
-  const results: EvalCaseResult[] = [];
 
   // eval_run täytyy olla tallessa ennen eval_result-rivejä, koska
   // jälkimmäisillä on FOREIGN KEY -viittaus run_id:hin.
   db?.insertEvalRun({ runId, promptSetPath: input.promptSetPath, models: input.models, judgeUsed });
 
-  for (const model of input.models) {
-    for (const testCase of cases) {
-      const messages: ChatMessage[] = [];
-      if (testCase.systemPrompt) messages.push({ role: "system", content: testCase.systemPrompt });
-      messages.push({ role: "user", content: testCase.prompt });
+  // Litistetään (malli, tehtävä) -parit samaan järjestykseen kuin aiempi
+  // sisäkkäinen for-silmukka (malli ulompana, tehtävä sisempänä), jotta
+  // mapWithConcurrency palauttaa tulokset täsmälleen samassa järjestyksessä
+  // kuin peräkkäinen ajo olisi tuottanut - riippumatta siitä, missä
+  // järjestyksessä yksittäiset kutsut oikeasti valmistuvat rinnakkain.
+  const jobs = input.models.flatMap((model) => cases.map((testCase) => ({ model, testCase })));
 
-      const start = Date.now();
-      try {
-        const result = await callChatCompletion({
-          baseUrl: config.provider.baseUrl,
-          apiKey: config.provider.apiKey,
-          model: resolveModelId(config.provider, model),
-          messages,
-          timeoutMs: config.provider.timeoutMs,
-        });
-        const latencyMs = Date.now() - start;
-        const passed = testCase.expectedContains
-          ? result.text.toLowerCase().includes(testCase.expectedContains.toLowerCase())
-          : null;
-        const judgeScore = judgeUsed ? await judgeResponse(config, testCase, result.text) : null;
-        const priceUsd = estimatePriceUsd(config, model, result.usage);
+  const results = await mapWithConcurrency(jobs, config.eval.concurrency, async ({ model, testCase }) => {
+    const messages: ChatMessage[] = [];
+    if (testCase.systemPrompt) messages.push({ role: "system", content: testCase.systemPrompt });
+    messages.push({ role: "user", content: testCase.prompt });
 
-        const row: EvalCaseResult = {
-          promptId: testCase.id,
-          model,
-          latencyMs,
-          response: result.text,
-          passed,
-          judgeScore,
-          priceUsd,
-          error: null,
-        };
-        results.push(row);
-        db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: row.response, passed, judgeScore, priceUsd, errorMessage: null });
-      } catch (err) {
-        const latencyMs = Date.now() - start;
-        const message = err instanceof Error ? err.message : String(err);
-        const row: EvalCaseResult = {
-          promptId: testCase.id,
-          model,
-          latencyMs,
-          response: "",
-          passed: null,
-          judgeScore: null,
-          priceUsd: null,
-          error: message,
-        };
-        results.push(row);
-        db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: "", passed: null, judgeScore: null, priceUsd: null, errorMessage: message });
-      }
+    const start = Date.now();
+    try {
+      const result = await callChatCompletion({
+        baseUrl: config.provider.baseUrl,
+        apiKey: config.provider.apiKey,
+        model: resolveModelId(config.provider, model),
+        messages,
+        timeoutMs: config.provider.timeoutMs,
+      });
+      const latencyMs = Date.now() - start;
+      const passed = testCase.expectedContains
+        ? result.text.toLowerCase().includes(testCase.expectedContains.toLowerCase())
+        : null;
+      const judgeScore = judgeUsed ? await judgeResponse(config, testCase, result.text) : null;
+      const priceUsd = estimatePriceUsd(config, model, result.usage);
+
+      const row: EvalCaseResult = {
+        promptId: testCase.id,
+        model,
+        latencyMs,
+        response: result.text,
+        passed,
+        judgeScore,
+        priceUsd,
+        error: null,
+      };
+      db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: row.response, passed, judgeScore, priceUsd, errorMessage: null });
+      return row;
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      const message = err instanceof Error ? err.message : String(err);
+      const row: EvalCaseResult = {
+        promptId: testCase.id,
+        model,
+        latencyMs,
+        response: "",
+        passed: null,
+        judgeScore: null,
+        priceUsd: null,
+        error: message,
+      };
+      db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: "", passed: null, judgeScore: null, priceUsd: null, errorMessage: message });
+      return row;
     }
-  }
+  });
 
   return {
     runId,
