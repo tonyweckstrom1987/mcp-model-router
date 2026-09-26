@@ -182,7 +182,7 @@ oletusaikakatkaisulla:
 ```yaml
 tasks:
   orchestration:
-    model: openrouter/openai/o1
+    model: openrouter/deepseek/deepseek-v4.1-flash
     timeoutMs: 120000   # 2 min, oletuksen sijaan 60000 ms (1 min)
 ```
 
