@@ -118,6 +118,50 @@ describe("runEval", () => {
     expect(modelB.errorCount).toBe(0);
   });
 
+  it("ryhmittelee tulokset tehtävätyypeittäin promptId:n etuliitteen mukaan ja laskee molemmat läpäisyprosentit", async () => {
+    const promptPath = writePromptSet([
+      { id: "yleinen-01", prompt: "K1", expectedContains: "ok" },
+      { id: "yleinen-02", prompt: "K2", expectedContains: "ok" },
+      { id: "pilkkominen-01", prompt: "K3", expectedContains: "budjetti" },
+      { id: "pilkkominen-02", prompt: "K4", expectedContains: "budjetti" },
+    ]);
+
+    const pool = mockAgent.get("http://litellm.local:4000");
+    // yleinen-01: läpäisee
+    pool.intercept({ path: "/chat/completions", method: "POST" }).reply(200, { model: "model-a", choices: [{ message: { content: "ok kyllä" } }] }).times(1);
+    // yleinen-02: ei läpäise
+    pool.intercept({ path: "/chat/completions", method: "POST" }).reply(200, { model: "model-a", choices: [{ message: { content: "väärä vastaus" } }] }).times(1);
+    // pilkkominen-01: virhe (esim. aikakatkaisu)
+    pool.intercept({ path: "/chat/completions", method: "POST" }).reply(500, "virhe").times(1);
+    // pilkkominen-02: läpäisee
+    pool
+      .intercept({ path: "/chat/completions", method: "POST" })
+      .reply(200, { model: "model-a", choices: [{ message: { content: "tarvitaan budjetti" } }] })
+      .times(1);
+
+    const report = await runEval(baseConfig(), { promptSetPath: promptPath, models: ["model-a"] });
+
+    expect(report.perTaskType).toHaveLength(2);
+
+    const yleinen = report.perTaskType.find((t) => t.taskType === "yleinen")!;
+    expect(yleinen.caseCount).toBe(2);
+    expect(yleinen.errorCount).toBe(0);
+    expect(yleinen.passedCount).toBe(1);
+    expect(yleinen.expectedCount).toBe(2);
+    expect(yleinen.passRateExcludingErrors).toBe(0.5);
+    expect(yleinen.passRateIncludingErrors).toBe(0.5);
+
+    const pilkkominen = report.perTaskType.find((t) => t.taskType === "pilkkominen")!;
+    expect(pilkkominen.caseCount).toBe(2);
+    expect(pilkkominen.errorCount).toBe(1);
+    expect(pilkkominen.passedCount).toBe(1);
+    expect(pilkkominen.expectedCount).toBe(2);
+    // Virhe pois nimittäjästä: 1/1 = 100 %
+    expect(pilkkominen.passRateExcludingErrors).toBe(1);
+    // Virhe mukana nimittäjässä epäonnistumisena: 1/2 = 50 %
+    expect(pilkkominen.passRateIncludingErrors).toBe(0.5);
+  });
+
   it("kirjoittaa eval_run- ja eval_result-rivit oikeassa järjestyksessä oikeaan tietokantaan", async () => {
     const promptPath = writePromptSet([{ id: "p1", prompt: "Hei", expectedContains: "moi" }]);
 

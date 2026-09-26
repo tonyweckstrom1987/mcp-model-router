@@ -7,6 +7,11 @@ export const ModelRouteSchema = z.object({
   model: z.string().min(1, "malli on pakollinen"),
   fallbackModel: z.string().min(1).optional(),
   systemPrompt: z.string().optional(),
+  // Valinnainen tehtävätyyppikohtainen aikakatkaisu, joka ohittaa
+  // provider.timeoutMs:n tälle tehtävätyypille. Hyödyllinen esim.
+  // päättelymalleille, jotka voivat kestää kauemmin pilkkomis- tai
+  // orkestrointitehtävissä kuin provider-tason oletusaikakatkaisu sallii.
+  timeoutMs: z.number().int().positive().optional(),
 });
 export type ModelRoute = z.infer<typeof ModelRouteSchema>;
 

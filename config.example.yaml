@@ -57,6 +57,12 @@ tasks:
     model: openrouter/openai/gpt-4o
     fallbackModel: openrouter/anthropic/claude-3.5-sonnet
     systemPrompt: "Olet agenttien orkestroija: pilko tehtävä osiin ja delegoi selkeästi."
+    # Valinnainen tehtävätyyppikohtainen aikakatkaisu (ms), joka ohittaa
+    # provider.timeoutMs:n vain tälle tehtävätyypille. Hyödyllinen
+    # esim. päättelymalleille, jotka voivat kestää kauemmin
+    # pilkkomis-/orkestrointitehtävissä kuin provider-tason
+    # oletusaikakatkaisu (60000 ms) sallii.
+    timeoutMs: 120000
 
 # Kulutuksen ja budjetin luku - ei omaa kirjanpitoa, luetaan suoraan
 # LiteLLM:n tai OpenRouterin rajapinnasta.

@@ -93,6 +93,34 @@ describe("routeAndComplete", () => {
     expect(result.text).toBe("vastaus");
   });
 
+  it("käyttää tehtävätyypin omaa timeoutMs:ää provider.timeoutMs:n sijaan", async () => {
+    const config = baseConfig();
+    config.provider.timeoutMs = 5000;
+    config.tasks.general = { model: "primary-model", timeoutMs: 20 };
+
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool
+      .intercept({ path: "/chat/completions", method: "POST" })
+      .reply(200, { model: "primary-model", choices: [{ message: { content: "liian myöhään" } }] })
+      .delay(200);
+
+    await expect(routeAndComplete(config, { taskType: "general", prompt: "moi" })).rejects.toThrow(/aikakatkaistiin \(20 ms\)/);
+  });
+
+  it("käyttää provider.timeoutMs:ää kun tehtävätyypillä ei ole omaa timeoutMs:ää", async () => {
+    const config = baseConfig();
+    config.provider.timeoutMs = 20;
+    config.tasks.general = { model: "primary-model" };
+
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool
+      .intercept({ path: "/chat/completions", method: "POST" })
+      .reply(200, { model: "primary-model", choices: [{ message: { content: "liian myöhään" } }] })
+      .delay(200);
+
+    await expect(routeAndComplete(config, { taskType: "general", prompt: "moi" })).rejects.toThrow(/aikakatkaistiin \(20 ms\)/);
+  });
+
   it("kirjoittaa kutsulokin oikeaan tietokantaan", async () => {
     const pool = mockAgent.get("http://litellm.local:4000");
     pool

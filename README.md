@@ -128,6 +128,9 @@ tasks:
   code:
     model: openrouter/qwen/qwen3-coder
     fallbackModel: openrouter/deepseek/deepseek-v4.1-flash
+  orchestration:
+    model: openrouter/openai/gpt-4o
+    timeoutMs: 120000   # ohittaa provider.timeoutMs:n tälle tehtävätyypille
 
 usage:
   provider: litellm   # litellm | openrouter
@@ -161,6 +164,27 @@ kautta - se ei ole osa OpenRouterin omaa mallitunnistetta.
   automaattisesti ennen rajapintakutsua (ks. `src/lib/modelId.ts`), joten
   sama `config.yaml` toimii sellaisenaan molemmilla - vain
   `LLM_BASE_URL`/`LLM_PROVIDER_KIND` vaihtuvat.
+
+### Tehtävätyyppikohtainen aikakatkaisu (`timeoutMs`)
+
+`tasks.<taskType>.timeoutMs` on valinnainen ja ohittaa `provider.timeoutMs`:n
+vain kyseiselle tehtävätyypille (vaikuttaa `route_and_complete`-kutsuihin,
+sekä päämalliin että varamalliin). Oletuksena kaikki tehtävätyypit käyttävät
+`provider.timeoutMs`:ää (oletus 60000 ms).
+
+Tämä on hyödyllinen erityisesti päättelymalleille (reasoning-malleilla), jotka
+voivat kestää huomattavasti kauemmin monimutkaisissa pilkkomis- tai
+orkestrointitehtävissä kuin yksinkertaisissa yleistiedon tai lyhyen koodin
+tehtävissä - ks. [Esimerkki: mitattu vertailu](#esimerkki-mitattu-vertailu),
+jossa "pilkkominen"-tehtävätyyppi aiheutti aikakatkaisuja 60 s
+oletusaikakatkaisulla:
+
+```yaml
+tasks:
+  orchestration:
+    model: openrouter/openai/o1
+    timeoutMs: 120000   # 2 min, oletuksen sijaan 60000 ms (1 min)
+```
 
 ## MCP-työkalut
 
@@ -222,6 +246,12 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   tallennetaan SQLiteen (`eval_run`/`eval_result`-taulut) `DB_PATH`:n
   osoittamaan tiedostoon, joten ajoja voi vertailla jälkikäteen myös
   suoraan tietokannasta.
+- Pitkä eval kestää useita minuutteja: esim. 2 mallia × 20 promptia = 40
+  peräkkäistä mallikutsua, ja jokainen kutsu voi kestää useita sekunteja
+  (tai `provider.timeoutMs`/tehtävätyypin oman `timeoutMs`:n verran, jos
+  malli jumiutuu) - ks. [Esimerkki: mitattu
+  vertailu](#esimerkki-mitattu-vertailu). `judge: true` lähes tuplaa ajoajan,
+  koska jokainen vastaus arvioidaan vielä erikseen.
 
 **Tulosten lukeminen** (`EvalReport`, ks. `src/eval/runEval.ts`):
 
@@ -232,15 +262,113 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   hinnastoa `config.yaml`:n `eval.pricing`-lohkossa) ja `error`
   (virheviesti tai `null`).
 - `perModel`: yhteenveto mallia kohden - `avgLatencyMs`, `passRate`
-  (`expectedContains`-läpäisyosuus 0-1, `null` jos yhdessäkään promptissa
-  ei ollut `expectedContains`-kenttää), `avgJudgeScore`, `avgPriceUsd` ja
+  (`expectedContains`-läpäisyosuus 0-1 **virheelliset kutsut pois
+  laskettuna**, `null` jos yhdessäkään promptissa ei ollut
+  `expectedContains`-kenttää), `avgJudgeScore`, `avgPriceUsd` ja
   `errorCount`/`caseCount`. Tämä on nopein tapa verrata malleja: matalampi
   `avgPriceUsd` ja `avgLatencyMs` samalla kun `passRate`/`avgJudgeScore`
   pysyy riittävän korkeana kertoo, mikä malli kannattaa valita
   `config.yaml`:n `tasks`-lohkoon.
-- MCP-työkalun tekstivastaus tiivistää `perModel`-rivit ihmisluettavaksi;
-  koko `EvalReport` (mukaan lukien `cases`) on saatavilla ohjelmallisesti
-  `structuredContent`-kentässä.
+- `perTaskType`: sama yhteenveto ryhmiteltynä (malli, tehtävätyyppi)
+  -pareittain. Tehtävätyyppi päätellään promptin `id`:n etuliitteestä
+  pudottamalla lopusta `-<numero>`, esim. `"yleinen-01"` → `"yleinen"`,
+  `"pilkkominen-05"` → `"pilkkominen"` (ks.
+  `taskTypeFromPromptId` tiedostossa `src/eval/runEval.ts`) - tämä ei liity
+  `config.yaml`:n `tasks`-avaimiin, vaan on pelkkä nimeämiskäytäntö
+  prompt-tiedostossa. Jokainen rivi sisältää:
+  - `caseCount`, `errorCount` - montako tapausta ja niistä montako virheitä.
+  - `passedCount`/`expectedCount` - montako läpäisi avainsanatarkistuksen
+    niistä tapauksista, joissa `expectedContains` oli annettu (= "läpäisty/n").
+  - `passRateExcludingErrors` - läpäisyosuus laskettuna vain onnistuneista
+    kutsuista (virheelliset kutsut pois sekä osoittajasta että
+    nimittäjästä). Kertoo vastauksen laadun, kun malli ylipäätään vastasi.
+  - `passRateIncludingErrors` - läpäisyosuus laskettuna niin, että virheet
+    (esim. aikakatkaisu) lasketaan läpäisemättömiksi (mukana nimittäjässä).
+    Kertoo tehtävätyypin kokonaisluotettavuuden mallilla.
+  - `avgLatencyMs`, `avgPriceUsd` - kuten `perModel`:ssa, mutta rajattuna
+    tähän tehtävätyyppiin.
+- MCP-työkalun tekstivastaus tiivistää sekä `perModel`- että
+  `perTaskType`-rivit ihmisluettavaksi; koko `EvalReport` (mukaan lukien
+  `cases`) on saatavilla ohjelmallisesti `structuredContent`-kentässä.
+
+**Judge-tila (`eval.judge`) - luotettavampi laatumittari**
+
+`expectedContains`-avainsanatarkistus on karkea: se hylkää hyvänkin
+vastauksen, jos se ei sisällä täsmälleen odotettua sanaa (ks. [Esimerkki:
+mitattu vertailu](#esimerkki-mitattu-vertailu) - erityisesti
+kirjoitus/tiivistystehtävissä tämä antaa harhaanjohtavan matalan
+läpäisyprosentin). LLM-tuomari arvioi vastauksen laadun asteikolla 1-5
+riippumatta siitä, osuuko vastaus täsmälleen odotettuun sanamuotoon, ja on
+siksi luotettavampi mittari erityisesti avoimissa (kirjoitus-, tiivistys-,
+pilkkomis-) tehtävissä.
+
+Ota judge käyttöön joko pysyvästi `config.yaml`:ssa tai yksittäiselle ajolle:
+
+```yaml
+eval:
+  judge:
+    enabled: true
+    model: openrouter/openai/gpt-4o-mini   # tuomarina toimiva malli
+    systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
+```
+
+tai välitä `"judge": true` `run_eval`-kutsun `arguments`-kenttään (ks.
+esimerkki yllä) - tämä ohittaa `config.yaml`:n asetuksen vain kyseiselle
+ajolle. Tuloksena `EvalCaseResult.judgeScore`/`EvalModelSummary.avgJudgeScore`
+täyttyvät `null`:n sijaan. Huomaa hintavaikutus: judge tekee yhden
+ylimääräisen mallikutsun jokaista prompt-tapausta kohden, joten se sekä
+maksaa että kestää suunnilleen kaksinkertaisesti verrattuna
+avainsanatarkistukseen.
+
+## Esimerkki: mitattu vertailu
+
+Alla yhden oikean `run_eval`-ajon tulokset (`examples/eval-prompts.fi.json`,
+20 promptia, judge pois päältä), joissa verrattiin kahta OpenRouterin kautta
+LiteLLM-proxyn taakse ajettua mallia: `deepseek-v4.1-flash` vs.
+`qwen3-coder`.
+
+**Kokonaisuus:**
+
+| Malli               | Läpäisy       | Viive ka. | Hinta ka./kutsu |
+|---------------------|---------------|-----------|------------------|
+| deepseek-v4.1-flash | 83 % (15/18, 2 aikakatkaisua) | 14 802 ms | 0,000744 USD |
+| qwen3-coder         | 85 % (17/20)  | 9 887 ms  | 0,000466 USD |
+
+**Tehtävätyypeittäin** (läpäisty/n, viive ka., hinta ka. USD/kutsu):
+
+| Tehtävätyyppi | deepseek-v4.1-flash | qwen3-coder |
+|---|---|---|
+| yleinen | 5/5, 2 190 ms, 0,000119 | 5/5, 5 600 ms, 0,000159 |
+| koodaus | 5/5, 4 025 ms, 0,000278 | 5/5, 3 742 ms, 0,000188 |
+| kirjoitus | 3/5, 7 841 ms, 0,000416 | 3/5, 1 567 ms, 0,000121 |
+| pilkkominen | 2/5 (+2 aikakatkaisua), 45 151 ms, 0,001867 | 4/5, 28 640 ms, 0,001395 |
+
+**Tulkinta:** kokonaisläpäisy on lähellä molemmilla malleilla, mutta
+`qwen3-coder` on sekä nopeampi että halvempi joka tehtävätyypissä tässä
+ajossa, ja se selvisi pilkkomistehtävistä ilman aikakatkaisuja.
+`deepseek-v4.1-flash`:n kaksi aikakatkaisua osuivat molemmat
+pilkkomistehtäviin (60 s oletusaikakatkaisulla) - ks.
+[Tehtävätyyppikohtainen aikakatkaisu](#tehtävätyyppikohtainen-aikakatkaisu-timeoutms),
+joka on juuri tätä varten.
+
+**Rajoitukset - lue nämä luvut varoen:**
+
+- **Pieni otos**: vain 5 promptia per tehtävätyyppi (20 yhteensä). Yksikin
+  tapaus muuttaa prosenttilukua 20 %-yksiköllä; tuloksia ei pidä yleistää
+  suoraan muihin promptteihin tai käyttötapauksiin.
+- **Avainsanatarkistus arvioi kirjoitustehtäviä huonosti**: `expectedContains`
+  hylkää muuten hyvän vastauksen, jos se ei sisällä täsmälleen odotettua
+  sanaa - kirjoitus/tiivistys-sarakkeen 3/5-luvut molemmilla malleilla
+  todennäköisesti aliarvioivat todellisen laadun. Ks. [Judge-tila](#eval-ajo-run_eval)
+  luotettavampaa vaihtoehtoa varten.
+- **Deepseekin aikakatkaisut** nostivat sen keskiviivettä ja hintaa
+  pilkkomis-sarakkeessa merkittävästi (60 s per aikakatkaisu lasketaan
+  mukaan viiveeseen) - ilman niitä keskiviive olisi ollut matalampi.
+- **Tulokset ovat yhdestä ajosta** (run `be440639-9aa7-4330-8c66-8cb2ed27b9ef`)
+  tiettynä ajankohtana ja riippuvat mallien senhetkisistä versioista sekä
+  OpenRouterin kuormasta/saatavuudesta - ne eivät ole pysyvä benchmark-tulos,
+  vaan esimerkki siitä, miten `run_eval`:n tulosraporttia luetaan. Aja oma
+  eval omilla prompteillasi ennen tuotantopäätöksiä.
 
 ## Claude Desktop / Cursor -asetus
 
