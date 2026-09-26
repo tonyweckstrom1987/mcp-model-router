@@ -140,7 +140,8 @@ usage:
 eval:
   judge:
     enabled: false
-    model: openrouter/openai/gpt-4o-mini
+    model: openrouter/openai/gpt-4o-mini   # eri malli kuin arvioitavat mallit, ks. alla
+  concurrency: 4   # montako (malli, prompt) -kutsua ajetaan samanaikaisesti
   pricing:
     openrouter/deepseek/deepseek-v4.1-flash:
       inputPerMillionUsd: 0.2
@@ -246,12 +247,46 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   tallennetaan SQLiteen (`eval_run`/`eval_result`-taulut) `DB_PATH`:n
   osoittamaan tiedostoon, joten ajoja voi vertailla jälkikäteen myös
   suoraan tietokannasta.
-- Pitkä eval kestää useita minuutteja: esim. 2 mallia × 20 promptia = 40
-  peräkkäistä mallikutsua, ja jokainen kutsu voi kestää useita sekunteja
-  (tai `provider.timeoutMs`/tehtävätyypin oman `timeoutMs`:n verran, jos
-  malli jumiutuu) - ks. [Esimerkki: mitattu
-  vertailu](#esimerkki-mitattu-vertailu). `judge: true` lähes tuplaa ajoajan,
-  koska jokainen vastaus arvioidaan vielä erikseen.
+- Eval voi tehdä paljon mallikutsuja: esim. 2 mallia × 20 promptia = 40
+  (malli, prompt) -paria, ja jokainen kutsu voi kestää useita sekunteja (tai
+  `provider.timeoutMs`/tehtävätyypin oman `timeoutMs`:n verran, jos malli
+  jumiutuu) - ks. [Esimerkki: mitattu vertailu](#esimerkki-mitattu-vertailu).
+  `judge: true` lähes tuplaa ajoajan, koska jokainen vastaus arvioidaan vielä
+  erikseen ylimääräisellä mallikutsulla.
+
+**Rinnakkaisajo (`eval.concurrency`)**
+
+`run_eval` ajaa (malli, prompt) -parit rinnakkain enintään
+`config.yaml`:n `eval.concurrency`-asetuksen verran samanaikaisesti
+(oletus 4, minimi 1). Toteutus on yksinkertainen rajoitettu työjono
+(`mapWithConcurrency`, ks. `src/eval/runEval.ts`) ilman uusia riippuvuuksia:
+kiinteä määrä "workereita" nostaa jonosta seuraavan käsittelemättömän
+tehtävän kerrallaan, kunnes jono on tyhjä.
+
+Kutsut ovat käytännössä koko ajan I/O-odotusta (verkkovastaus mallilta),
+eivät CPU-työtä, joten rinnakkaisajo lyhentää kokonaisajoaikaa suoraan
+suhteessa `concurrency`-arvoon - esim. 2 mallia × 20 promptia × judge
+päällä (40 vastauskutsua + 40 judge-kutsua = 80 kutsua) kesti aiemmin
+peräkkäin ajettuna noin 12 minuuttia; `concurrency: 4`:llä samat kutsut
+menevät neljä kerrallaan, mikä lyhentää ajoaikaa merkittävästi samalla
+prompt-sarjalla ja mallivalinnalla.
+
+Huomioita:
+
+- **Tulosten järjestys säilyy** riippumatta siitä, missä järjestyksessä
+  yksittäiset kutsut valmistuvat: `cases`-taulukko on aina samassa
+  järjestyksessä kuin peräkkäin ajettuna (malli ulompana, prompt sisempänä,
+  `input.models`/prompt-tiedoston järjestyksessä).
+- **Virheenkäsittely on edelleen per kutsu**: yhden kutsun aikakatkaisu tai
+  muu virhe (myös judge-kutsun virhe) ei keskeytä muita rinnakkaisia tai
+  jonossa odottavia kutsuja - se näkyy vain kyseisen tapauksen `error`-
+  kentässä, kuten peräkkäisessäkin ajossa.
+- **Miksi oletus on 4, ei enemmän**: liian suuri rinnakkaisuus voi
+  ylikuormittaa LiteLLM-proxyn tai OpenRouterin rate limitit, jolloin osa
+  kutsuista alkaa epäonnistua 429-virheillä sen sijaan, että eval oikeasti
+  nopeutuisi. Nosta arvoa varovasti oman proxyn/API-avaimen rajojen
+  mukaan, tai laske se `1`:een, jos haluat täysin peräkkäisen (deterministisen
+  ajoituksen kannalta yksinkertaisimman) ajon esim. vianetsintää varten.
 
 **Tulosten lukeminen** (`EvalReport`, ks. `src/eval/runEval.ts`):
 
@@ -319,6 +354,13 @@ täyttyvät `null`:n sijaan. Huomaa hintavaikutus: judge tekee yhden
 ylimääräisen mallikutsun jokaista prompt-tapausta kohden, joten se sekä
 maksaa että kestää suunnilleen kaksinkertaisesti verrattuna
 avainsanatarkistukseen.
+
+**Valitse `eval.judge.model` eri malliksi kuin arvioitavat mallit.** Malli
+suosii tyypillisesti omaa vastaustyyliään (esim. omaa tapaansa jäsentää
+vastaus tai muotoilla lauseet), jolloin sama malli tuomarina antaisi
+korkeampia pisteitä omaa tyyliään muistuttaville vastauksille - tämä vinouttaa
+vertailua juuri sitä mallia suosivaksi. Käytä siis tuomarina mallia, joka ei
+ole yksikään `run_eval`-kutsun `models`-listalla olevista.
 
 ## Esimerkki: mitattu vertailu
 

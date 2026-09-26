@@ -36,6 +36,9 @@ export type UsageConfig = z.infer<typeof UsageConfigSchema>;
 
 export const EvalJudgeConfigSchema = z.object({
   enabled: z.boolean().default(false),
+  // Suositus: valitse tuomarimalliksi eri malli kuin ne, joita run_eval
+  // arvioi. Malli suosii tyypillisesti omaa vastaustyyliään, jolloin
+  // sama malli tuomarina vinouttaisi pisteytystä sitä itseään kohti.
   model: z.string().optional(),
   systemPrompt: z.string().optional(),
 });
@@ -50,6 +53,12 @@ export const EvalConfigSchema = z.object({
   judge: EvalJudgeConfigSchema.default({ enabled: false }),
   // Valinnainen hinnasto $/miljoona tokenia eval-raportin hinta-arviota varten
   pricing: z.record(z.string(), ModelPricingSchema).default({}),
+  // Montako (malli, prompt) -kutsua ajetaan samanaikaisesti run_eval-ajossa.
+  // Nostaa läpimenoa merkittävästi isoilla prompt-sarjoilla, koska kutsut
+  // odottavat pääosin verkkovastausta. Oletus 4 tasapainottaa nopeutta ja
+  // sitä, että liian suuri rinnakkaisuus voi ylikuormittaa LiteLLM-proxyn
+  // tai OpenRouterin rate limitit.
+  concurrency: z.number().int().min(1).default(4),
 });
 export type EvalConfig = z.infer<typeof EvalConfigSchema>;
 

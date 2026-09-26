@@ -13,7 +13,7 @@ function baseConfig(overrides: Partial<AppConfig["eval"]> = {}): AppConfig {
     provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000, kind: "litellm" },
     tasks: { general: { model: "m1" } },
     usage: { provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "" },
-    eval: { judge: { enabled: false }, pricing: {}, ...overrides },
+    eval: { judge: { enabled: false }, pricing: {}, concurrency: 4, ...overrides },
     database: { path: ":memory:" },
   };
 }
@@ -177,5 +177,64 @@ describe("runEval", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].model).toBe("model-a");
     db.close();
+  });
+
+  it("säilyttää tulosten järjestyksen, vaikka rinnakkaiset kutsut valmistuisivat eri järjestyksessä", async () => {
+    // p1 vastaa hitaammin kuin p2, mutta tuloksen pitää silti tulla ennen
+    // p2:ta - järjestys tulee promptien järjestyksestä, ei valmistumisjärjestyksestä.
+    const promptPath = writePromptSet([
+      { id: "p1", prompt: "hidas" },
+      { id: "p2", prompt: "nopea" },
+    ]);
+
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool
+      .intercept({ path: "/chat/completions", method: "POST", body: (b) => JSON.parse(b as string).messages[0].content === "hidas" })
+      .reply(200, { model: "model-a", choices: [{ message: { content: "hidas vastaus" } }] })
+      .delay(30);
+    pool
+      .intercept({ path: "/chat/completions", method: "POST", body: (b) => JSON.parse(b as string).messages[0].content === "nopea" })
+      .reply(200, { model: "model-a", choices: [{ message: { content: "nopea vastaus" } }] });
+
+    const report = await runEval(baseConfig({ concurrency: 4 }), { promptSetPath: promptPath, models: ["model-a"] });
+
+    expect(report.cases.map((c) => c.promptId)).toEqual(["p1", "p2"]);
+    expect(report.cases[0].response).toBe("hidas vastaus");
+    expect(report.cases[1].response).toBe("nopea vastaus");
+  });
+
+  it("rajoittaa samanaikaisten kutsujen määrän config.eval.concurrency:iin", async () => {
+    // MockAgentin oma delay() ei sovi tähän, koska sen callback suoritetaan
+    // pyynnön saapuessa (ennen viivettä) - se ei kerro milloin vastaus
+    // todella valmistuu. Ohitetaan siksi globaali fetch suoraan, jotta
+    // inFlight-laskuria voi laskea alas vasta kun "kutsu" oikeasti päättyy.
+    const promptPath = writePromptSet([
+      { id: "p1", prompt: "a" },
+      { id: "p2", prompt: "b" },
+      { id: "p3", prompt: "c" },
+      { id: "p4", prompt: "d" },
+    ]);
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      inFlight -= 1;
+      return new Response(JSON.stringify({ model: "model-a", choices: [{ message: { content: "ok" } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const report = await runEval(baseConfig({ concurrency: 2 }), { promptSetPath: promptPath, models: ["model-a"] });
+      expect(report.cases).toHaveLength(4);
+      expect(maxInFlight).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

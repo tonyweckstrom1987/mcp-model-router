@@ -75,8 +75,16 @@ usage:
 eval:
   judge:
     enabled: false
+    # Huom: valitse tuomarimalliksi eri malli kuin ne, joita run_eval
+    # arvioi. Malli suosii tyypillisesti omaa vastaustyyliään, joten samalla
+    # mallilla tuomarina pisteet vinoutuisivat sitä itseään suosiviksi.
     model: openrouter/openai/gpt-4o-mini
     systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
+  # Montako (malli, prompt) -kutsua run_eval ajaa samanaikaisesti.
+  # Oletus 4. Nostaa läpimenoa isoilla prompt-sarjoilla, koska kutsut
+  # odottavat pääosin verkkovastausta - liian suuri arvo voi kuitenkin
+  # ylikuormittaa LiteLLM-proxyn tai OpenRouterin rate limitit.
+  concurrency: 4
   # Valinnainen hinnasto $/miljoona tokenia eval-raportin hinta-arviota
   # varten (LiteLLM/OpenRouter näyttävät jo toteutuneen kulutuksen -
   # tämä on vain vertailua varten eval-ajon sisällä).
