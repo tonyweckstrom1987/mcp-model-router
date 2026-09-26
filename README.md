@@ -22,6 +22,26 @@ niitä uudelleen. Se tekee kolme asiaa:
 SQLite-tietokantaa käytetään **vain** kutsulokille ja eval-tuloksille - ei
 kulutuksen tai budjetin kirjanpitoon.
 
+## Nopea kokeilu
+
+Neljällä komennolla ensimmäinen `route_and_complete`-kutsu HTTP-tilassa
+(oleta, että LiteLLM pyörii jo osoitteessa `http://localhost:4000` ja siinä
+on ainakin `general`-tehtävän malli konfiguroitu):
+
+```bash
+npm install && npm run build
+cp config.example.yaml config.yaml   # muokkaa tarpeen mukaan
+LLM_BASE_URL=http://localhost:4000 LLM_API_KEY=sk-... MCP_TRANSPORT=http MCP_HTTP_PORT=3100 npm start &
+curl -s -X POST http://127.0.0.1:3100/mcp \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}'
+```
+
+Neljäs komento tekee `tools/call`-pyynnön palvelimen `/mcp`-päätepisteeseen ja
+tulostaa vastauksen (streamable HTTP -tapahtumavirtana). Tarkemmat
+ympäristömuuttujat, `stdio`-siirtotapa ja `GET /healthz` -terveystarkastus:
+ks. [Asennus](#asennus) ja [Ajaminen](#ajaminen).
+
 ## Arkkitehtuuri
 
 ```
@@ -72,7 +92,7 @@ Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
 | `DB_PATH`           | SQLite-tiedoston polku                                         | `./data/mcp-model-router.sqlite` |
 | `MCP_TRANSPORT`     | `stdio` tai `http`                                              | `stdio`                    |
 | `MCP_HTTP_HOST`     | HTTP-siirtotavan bind-osoite                                    | `127.0.0.1`                |
-| `MCP_HTTP_PORT`     | HTTP-siirtotavan portti                                         | `3000`                     |
+| `MCP_HTTP_PORT`     | HTTP-siirtotavan portti (oletus vaihdettu 3100:aan, koska 3000 on usein varattu esim. Open WebUI:lle) | `3100`                     |
 | `MCP_ALLOWED_HOSTS` | Pilkulla eroteltu lista sallittuja Host-otsikoita (DNS-rebinding-suojaus) | (ei asetettu)      |
 
 ### Ajaminen
@@ -82,30 +102,13 @@ Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
 npm start
 
 # streamable HTTP (muut kontit Tailscale-verkossa)
-MCP_TRANSPORT=http MCP_HTTP_HOST=0.0.0.0 MCP_HTTP_PORT=3000 npm start
+MCP_TRANSPORT=http MCP_HTTP_HOST=0.0.0.0 MCP_HTTP_PORT=3100 npm start
 ```
 
 HTTP-tilassa palvelin vastaa osoitteessa `http://<host>:<port>/mcp` ja
-tarjoaa lisäksi `GET /healthz` -terveystarkastuksen.
-
-### Nopea kokeilu
-
-Kolmella komennolla ensimmäinen `route_and_complete`-kutsu toimimaan
-paikallista LiteLLM-proxyä vasten (oleta, että LiteLLM pyörii jo
-osoitteessa `http://localhost:4000` ja siinä on ainakin `general`-tehtävän
-malli konfiguroitu):
-
-```bash
-npm install && npm run build
-cp config.example.yaml config.yaml
-
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}' \
-  | LLM_BASE_URL=http://localhost:4000 LLM_API_KEY=sk-... node dist/index.js
-```
-
-Kolmas komento käynnistää palvelimen stdio-siirtotavalla, syöttää sille
-yhden `tools/call`-pyynnön stdinistä ja tulostaa vastauksen. HTTP-tilassa
-vastaava kutsu tehdään `curl`illa `/mcp`-osoitteeseen (ks. [Ajaminen](#ajaminen)).
+tarjoaa lisäksi `GET /healthz` -terveystarkastuksen. Stdio-tilassa vastaava
+`tools/call`-pyyntö syötetään palvelimelle stdinistä yksittäisenä
+JSON-RPC-viestinä (ks. [Nopea kokeilu](#nopea-kokeilu) HTTP-versiosta).
 
 ## config.yaml-esimerkki
 
@@ -177,6 +180,68 @@ Eval-prompt-tiedoston muoto, ks. esimerkki
 ]
 ```
 
+Laajempi, 15-20 suomenkielisen promptin esimerkkisarja neljälle tehtävätyypille
+(yleinen tieto, koodaus, kirjoitus/tiivistys, tehtävän pilkkominen) löytyy
+tiedostosta [`examples/eval-prompts.fi.json`](./examples/eval-prompts.fi.json).
+
+### Eval-ajo (`run_eval`)
+
+`run_eval` on MCP-työkalu, ei erillinen CLI-komento - se kutsutaan samalla
+tavalla kuin muutkin työkalut (`tools/call`, ks. [Nopea
+kokeilu](#nopea-kokeilu)). Esimerkki HTTP-tilassa, kahdella mallilla ja
+`eval-prompts.fi.json`-sarjalla:
+
+```bash
+curl -s -X POST http://127.0.0.1:3100/mcp \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc":"2.0","id":1,"method":"tools/call",
+    "params":{
+      "name":"run_eval",
+      "arguments":{
+        "promptSetPath":"examples/eval-prompts.fi.json",
+        "models":["openrouter/deepseek/deepseek-v4.1-flash","openrouter/qwen/qwen3-flash"],
+        "judge": false
+      }
+    }
+  }'
+```
+
+- `models`-lista käyttää samoja LiteLLM `model_name`-aliaksia kuin
+  `config.yaml`:n `tasks`-lohko (ks. [Tunnetut
+  rajoitukset](#tunnetut-rajoitukset)) - ei tarvitse olla sama malli kuin
+  jonkin `taskType`:n oletusmalli.
+- `judge`-parametri (valinnainen) ohittaa `config.yaml`:n
+  `eval.judge.enabled`-asetuksen yksittäiselle ajolle. Kun tuomari on
+  päällä, jokainen vastaus lähetetään lisäksi `eval.judge.model`:lle
+  arvioitavaksi asteikolla 1-5 (`config.yaml`:n `eval.judge.systemPrompt`
+  tai oletusarvo) - tämä tekee saman määrän ylimääräisiä mallikutsuja kuin
+  on prompt-tapauksia, joten se maksaa ja kestää enemmän.
+- Jos `db`-instanssi on käytössä (näin on aina, kun palvelin käynnistetään
+  `dist/index.js`:llä - ks. `src/index.ts`), jokainen ajo ja tulosrivi
+  tallennetaan SQLiteen (`eval_run`/`eval_result`-taulut) `DB_PATH`:n
+  osoittamaan tiedostoon, joten ajoja voi vertailla jälkikäteen myös
+  suoraan tietokannasta.
+
+**Tulosten lukeminen** (`EvalReport`, ks. `src/eval/runEval.ts`):
+
+- `cases`: yksi rivi per (malli, prompt) - sisältää `latencyMs`,
+  `response`-tekstin, `passed` (`true`/`false`/`null` jos
+  `expectedContains`-kenttää ei annettu kyseiselle promptille),
+  `judgeScore` (1-5 tai `null`), `priceUsd` (`null`, jos mallille ei ole
+  hinnastoa `config.yaml`:n `eval.pricing`-lohkossa) ja `error`
+  (virheviesti tai `null`).
+- `perModel`: yhteenveto mallia kohden - `avgLatencyMs`, `passRate`
+  (`expectedContains`-läpäisyosuus 0-1, `null` jos yhdessäkään promptissa
+  ei ollut `expectedContains`-kenttää), `avgJudgeScore`, `avgPriceUsd` ja
+  `errorCount`/`caseCount`. Tämä on nopein tapa verrata malleja: matalampi
+  `avgPriceUsd` ja `avgLatencyMs` samalla kun `passRate`/`avgJudgeScore`
+  pysyy riittävän korkeana kertoo, mikä malli kannattaa valita
+  `config.yaml`:n `tasks`-lohkoon.
+- MCP-työkalun tekstivastaus tiivistää `perModel`-rivit ihmisluettavaksi;
+  koko `EvalReport` (mukaan lukien `cases`) on saatavilla ohjelmallisesti
+  `structuredContent`-kentässä.
+
 ## Claude Desktop / Cursor -asetus
 
 `claude_desktop_config.json` (tai vastaava Cursorin MCP-asetustiedosto),
@@ -201,7 +266,7 @@ stdio-siirtotavalla:
 
 Jos palvelin pyörii jo HTTP-tilassa (esim. omassa LXC-kontissa), monet
 MCP-klientit tukevat myös suoraa streamable HTTP -yhteyttä osoitteeseen
-`http://<tailscale-host>:3000/mcp` ilman `command`-käynnistystä - katso oman
+`http://<tailscale-host>:3100/mcp` ilman `command`-käynnistystä - katso oman
 klienttisi dokumentaatio.
 
 ## Ajaminen Proxmox-LXC:ssä
@@ -249,7 +314,7 @@ npm run typecheck    # tsc --noEmit
 npm test             # vitest, HTTP-kutsut mockattu undicilla
 ```
 
-## Mitä ei (vielä) ole
+## Tunnetut rajoitukset
 
 - Ei omaa autentikointia HTTP-siirtotavalle (luotetaan verkkotason
   rajaukseen, esim. Tailscale).
@@ -257,3 +322,14 @@ npm test             # vitest, HTTP-kutsut mockattu undicilla
   `list_models` lukee vain `config.yaml`:n.
 - Eval-hinta-arvio perustuu `config.yaml`:n `eval.pricing`-hinnastoon, ei
   automaattiseen hintojen hakuun OpenRouterista.
+- `get_usage` vaatii, että LiteLLM on käynnistetty tietokannan (Postgres)
+  kanssa ja että `USAGE_API_KEY` on LiteLLM:n **pääavain** (`LITELLM_MASTER_KEY`),
+  koska `/user/info` on hallintarajapinta. Ilman tietokantaa LiteLLM palauttaa
+  `"Database not connected"` (HTTP 500), ja `get_usage` välittää tämän virheen
+  sellaisenaan kutsujalle. Pelkkä OpenRouter-käyttö (`usage.provider: openrouter`)
+  ei vaadi tietokantaa.
+- `tasks`-lohkon ja `run_eval`:n mallitunnisteet ovat LiteLLM:n
+  `model_name`-aliaksia (LiteLLM-konfiguraatiossa/proxy-mallilistassa
+  määriteltyjä nimiä), eivät suoraan OpenRouterin tai muun taustapalvelun
+  omia mallitunnisteita - ks. [Mallitunnisteet: LiteLLM vs. suora
+  OpenRouter](#mallitunnisteet-litellm-vs-suora-openrouter).

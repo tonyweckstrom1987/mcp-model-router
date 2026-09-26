@@ -1,0 +1,123 @@
+[
+  {
+    "id": "yleinen-01",
+    "category": "yleinen tieto",
+    "prompt": "Mikä on Ruotsin pääkaupunki?",
+    "expectedContains": "Tukholma"
+  },
+  {
+    "id": "yleinen-02",
+    "category": "yleinen tieto",
+    "prompt": "Kuka kokosi Kalevalan suomalaisista kansanrunoista yhtenäiseksi teokseksi?",
+    "expectedContains": "Lönnrot"
+  },
+  {
+    "id": "yleinen-03",
+    "category": "yleinen tieto",
+    "prompt": "Mikä on Suomen suurin järvi pinta-alaltaan?",
+    "expectedContains": "Saimaa"
+  },
+  {
+    "id": "yleinen-04",
+    "category": "yleinen tieto",
+    "prompt": "Mikä planeetta on lähimpänä Aurinkoa?",
+    "expectedContains": "Merkurius"
+  },
+  {
+    "id": "yleinen-05",
+    "category": "yleinen tieto",
+    "prompt": "Minä vuonna Suomi itsenäistyi Venäjästä?",
+    "expectedContains": "1917"
+  },
+  {
+    "id": "koodaus-01",
+    "category": "koodaus",
+    "prompt": "Mitä JavaScript-lauseke `typeof null` palauttaa? Vastaa vain arvolla.",
+    "expectedContains": "object"
+  },
+  {
+    "id": "koodaus-02",
+    "category": "koodaus",
+    "prompt": "Mikä on binäärihaun aikavaativuus Landau-merkinnällä (Big O), kun taulukko on valmiiksi järjestetty?",
+    "expectedContains": "log"
+  },
+  {
+    "id": "koodaus-03",
+    "category": "koodaus",
+    "prompt": "Minkä HTTP-statuskoodin palvelin palauttaa tyypillisesti, kun pyydettyä resurssia ei löydy?",
+    "expectedContains": "404"
+  },
+  {
+    "id": "koodaus-04",
+    "category": "koodaus",
+    "prompt": "Millä git-komennolla perutaan viimeisin commit niin, että sen muutokset säilyvät staged-tilassa (indeksissä)?",
+    "expectedContains": "soft"
+  },
+  {
+    "id": "koodaus-05",
+    "category": "koodaus",
+    "systemPrompt": "Vastaa vain koodilla, ilman selityksiä.",
+    "prompt": "Kirjoita Python-funktio `is_palindrome(s)`, joka palauttaa True, jos merkkijono on palindromi kirjainkoosta riippumatta (esim. 'Anna' on palindromi).",
+    "expectedContains": "lower"
+  },
+  {
+    "id": "kirjoitus-01",
+    "category": "kirjoitus/tiivistys",
+    "prompt": "Tiivistä yhteen lyhyeen virkkeeseen tärkein viesti: 'Yhtiön kolmannen vuosineljänneksen liikevaihto kasvoi 12 %, mutta kulut nousivat samaan aikaan 20 %, minkä vuoksi käyttökate laski edellisvuodesta.'",
+    "expectedContains": "kannattavuus"
+  },
+  {
+    "id": "kirjoitus-02",
+    "category": "kirjoitus/tiivistys",
+    "prompt": "Kirjoita kohtelias avausvirke asiakaspalvelusähköpostiin, jossa pahoitellaan asiakkaalle myöhästynyttä toimitusta.",
+    "expectedContains": "pahoittel"
+  },
+  {
+    "id": "kirjoitus-03",
+    "category": "kirjoitus/tiivistys",
+    "prompt": "Muunna seuraava passiivimuotoinen virke aktiiviin äänimuotoon: 'Raportti kirjoitettiin komitean toimesta.'",
+    "expectedContains": "kirjoitti"
+  },
+  {
+    "id": "kirjoitus-04",
+    "category": "kirjoitus/tiivistys",
+    "prompt": "Tiivistä täsmälleen kolmella sanalla pääasia tekstistä: 'Tutkimuksen mukaan säännöllinen liikunta parantaa paitsi fyysistä kuntoa myös muistia ja keskittymiskykyä aivotoiminnan kautta.'",
+    "expectedContains": "muist"
+  },
+  {
+    "id": "kirjoitus-05",
+    "category": "kirjoitus/tiivistys",
+    "prompt": "Lyhennä seuraava virke säilyttäen kaikki olennainen tieto: 'Kokous, joka oli alun perin tarkoitus pitää maanantaina, siirrettiin tiistaille, koska kaksi avainhenkilöä ei päässyt paikalle sairauden vuoksi.'",
+    "expectedContains": "tiistai"
+  },
+  {
+    "id": "pilkkominen-01",
+    "category": "tehtävän pilkkominen",
+    "prompt": "Pilko tehtävä 'Järjestä 50 hengen kesäjuhla yritykselle' konkreettisiin osatehtäviin aikajärjestyksessä.",
+    "expectedContains": "budjet"
+  },
+  {
+    "id": "pilkkominen-02",
+    "category": "tehtävän pilkkominen",
+    "prompt": "Listaa tärkeimmät vaiheet, joilla uusi verkkokauppa julkaistaan turvallisesti tuotantoon.",
+    "expectedContains": "varmuuskopio"
+  },
+  {
+    "id": "pilkkominen-03",
+    "category": "tehtävän pilkkominen",
+    "prompt": "Pilko tehtävä 'Muuta tuotantotietokannan skeema ilman katkoksia palveluun' pienempiin, turvallisiin vaiheisiin.",
+    "expectedContains": "rollback"
+  },
+  {
+    "id": "pilkkominen-04",
+    "category": "tehtävän pilkkominen",
+    "prompt": "Miten jaat projektin 'Uuden mobiilisovelluksen kehitys ja julkaisu' vaiheisiin, joissa on selkeät välitavoitteet?",
+    "expectedContains": "testau"
+  },
+  {
+    "id": "pilkkominen-05",
+    "category": "tehtävän pilkkominen",
+    "prompt": "Pilko tehtävä 'Valmistaudu huomiseen tärkeään asiakastapaamiseen' konkreettisiin toimiin.",
+    "expectedContains": "esityslist"
+  }
+]

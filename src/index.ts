@@ -12,7 +12,7 @@ async function main(): Promise<void> {
 
   if (transportKind === "http") {
     const host = process.env.MCP_HTTP_HOST ?? "127.0.0.1";
-    const port = Number.parseInt(process.env.MCP_HTTP_PORT ?? "3000", 10);
+    const port = Number.parseInt(process.env.MCP_HTTP_PORT ?? "3100", 10);
     const allowedHosts = process.env.MCP_ALLOWED_HOSTS?.split(",").map((h) => h.trim()).filter(Boolean);
     startHttpTransport(() => createServer(config, db), { host, port, allowedHosts });
   } else if (transportKind === "stdio") {
