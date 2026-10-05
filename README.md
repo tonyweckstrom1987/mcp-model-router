@@ -2,6 +2,10 @@
 
 > **English summary:** An MCP server that *complements* LiteLLM instead of replacing it. It (1) picks a model by task type from `config.yaml`, (2) reads usage and budget from LiteLLM or OpenRouter, and (3) runs the same prompt set across several models and compares cost, latency and quality. Works over stdio or streamable HTTP; SQLite stores only call logs and eval results. Details below in Finnish.
 
+**Teknologiat:** TypeScript, Node.js 20/22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
+
+**Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
+
 MCP-palvelin, joka **täydentää LiteLLM:ää eikä korvaa sitä**. LiteLLM/OpenRouter
 hoitavat jo agenttikohtaiset avaimet ja kulukatot - tämä palvelin ei rakenna
 niitä uudelleen. Se tekee kolme asiaa:
