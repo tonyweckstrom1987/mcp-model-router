@@ -1,5 +1,7 @@
 # mcp-model-router
 
+[![CI](https://github.com/tonyweckstrom1987/mcp-model-router/actions/workflows/ci.yml/badge.svg)](https://github.com/tonyweckstrom1987/mcp-model-router/actions/workflows/ci.yml) ![Lisenssi: MIT](https://img.shields.io/badge/lisenssi-MIT-blue.svg)
+
 > **English summary:** An MCP server that *complements* LiteLLM instead of replacing it. It (1) picks a model by task type from `config.yaml`, (2) reads usage and budget from LiteLLM or OpenRouter, and (3) runs the same prompt set across several models and compares cost, latency and quality. Works over stdio or streamable HTTP; SQLite stores only call logs and eval results. Details below in Finnish.
 
 **Teknologiat:** TypeScript, Node.js 20/22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
