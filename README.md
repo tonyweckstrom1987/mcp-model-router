@@ -6,7 +6,7 @@
 
 **Teknologiat:** TypeScript, Node.js 20/22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
 
-**Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
+**Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Kokeile ilman avainta](#kokeile-ilman-llm-avainta) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
 
 MCP-palvelin, joka **täydentää LiteLLM:ää eikä korvaa sitä**. LiteLLM/OpenRouter
 hoitavat jo agenttikohtaiset avaimet ja kulukatot - tämä palvelin ei rakenna
@@ -49,6 +49,28 @@ Neljäs komento tekee `tools/call`-pyynnön palvelimen `/mcp`-päätepisteeseen 
 tulostaa vastauksen (streamable HTTP -tapahtumavirtana). Tarkemmat
 ympäristömuuttujat, `stdio`-siirtotapa ja `GET /healthz` -terveystarkastus:
 ks. [Asennus](#asennus) ja [Ajaminen](#ajaminen).
+
+## Kokeile ilman LLM-avainta
+
+`list_models` lukee vain `config.yaml`:n, joten sen voi kokeilla ilman LiteLLM:ää tai API-avainta. Stdio-tilassa palvelin lukee JSON-RPC-viestit stdinistä (`sleep 2` pitää putken auki, kunnes vastaus on tullut):
+
+```bash
+cp config.example.yaml config.yaml
+(printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"kokeilu","version":"0"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_models","arguments":{}}}'; sleep 2) | node dist/index.js
+```
+
+Viimeisen rivin vastauksen tekstiosa `config.example.yaml`:lla:
+
+```
+Tehtävätyypeittäin määritellyt mallit:
+- general: openrouter/deepseek/deepseek-v4.1-flash (varamalli: openrouter/qwen/qwen3-flash)
+- code: openrouter/qwen/qwen3-coder (varamalli: openrouter/deepseek/deepseek-v4.1-flash)
+- writing: openrouter/anthropic/claude-3.5-sonnet (varamalli: openrouter/openai/gpt-4o-mini)
+- orchestration: openrouter/openai/gpt-4o (varamalli: openrouter/anthropic/claude-3.5-sonnet)
+```
 
 ## Arkkitehtuuri
 
