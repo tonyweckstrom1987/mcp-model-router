@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from "undici";
 import { callChatCompletion } from "../src/lib/openaiClient.js";
+import { budgetFor } from "../src/lib/budget.js";
+import { Db } from "../src/lib/db.js";
 
 describe("callChatCompletion", () => {
   let mockAgent: MockAgent;
@@ -29,6 +31,7 @@ describe("callChatCompletion", () => {
 
     const result = await callChatCompletion({
       baseUrl: "http://litellm.local:4000",
+      budget: budgetFor(new Db(":memory:")),
       model: "test-model",
       messages: [{ role: "user", content: "Hei" }],
     });
@@ -50,6 +53,7 @@ describe("callChatCompletion", () => {
 
     const result = await callChatCompletion({
       baseUrl: "http://litellm.local:4000",
+      budget: budgetFor(new Db(":memory:")),
       apiKey: "salainen-avain",
       model: "test-model",
       messages: [{ role: "user", content: "Hei" }],
@@ -67,6 +71,7 @@ describe("callChatCompletion", () => {
     await expect(
       callChatCompletion({
         baseUrl: "http://litellm.local:4000",
+        budget: budgetFor(new Db(":memory:")),
         model: "test-model",
         messages: [{ role: "user", content: "Hei" }],
       }),

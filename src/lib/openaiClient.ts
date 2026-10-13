@@ -4,6 +4,9 @@
  * ei suoria Anthropic-kutsuja, vain HTTP(S) määriteltyyn base URL:iin.
  */
 
+import { estimateInputTokens, type TokenBudget } from "./budget.js";
+import { LimitExceededError, MAX_TOKENS_PER_CALL } from "./limits.js";
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -30,6 +33,8 @@ export interface CallChatCompletionOptions {
   timeoutMs?: number;
   temperature?: number;
   maxTokens?: number;
+  /** Pakollinen: jokainen kutsu varaa budjetista ennen lähettämistä. */
+  budget: TokenBudget;
 }
 
 export function joinUrl(baseUrl: string, path: string): string {
@@ -41,6 +46,17 @@ export function authHeaders(apiKey?: string): Record<string, string> {
 }
 
 export async function callChatCompletion(opts: CallChatCompletionOptions): Promise<ChatCompletionResult> {
+  // 1) Kattotarkistus ennen mitään muuta: liian suurta max_tokensia ei pienennetä hiljaa, vaan kutsu hylätään.
+  if (opts.maxTokens !== undefined) {
+    if (!Number.isInteger(opts.maxTokens) || opts.maxTokens < 1 || opts.maxTokens > MAX_TOKENS_PER_CALL) {
+      throw new LimitExceededError(`maxTokens täytyy olla kokonaisluku väliltä 1-${MAX_TOKENS_PER_CALL}; kutsua ei tehty`);
+    }
+  }
+  const maxTokens = opts.maxTokens ?? MAX_TOKENS_PER_CALL;
+
+  // 2) Varaus ENNEN kutsua: syötteen arvio + max_tokens. Epäonnistunut kutsu ei vapauta varausta.
+  const reservation = opts.budget.reserve(estimateInputTokens(opts.messages) + maxTokens);
+
   const url = joinUrl(opts.baseUrl, "/chat/completions");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 60_000);
@@ -56,7 +72,7 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
         model: opts.model,
         messages: opts.messages,
         ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-        ...(opts.maxTokens !== undefined ? { max_tokens: opts.maxTokens } : {}),
+        max_tokens: maxTokens,
       }),
       signal: controller.signal,
     });
@@ -72,7 +88,8 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
       usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
 
-    const text = json.choices?.[0]?.message?.content ?? "";
+    const content: unknown = json.choices?.[0]?.message?.content;
+    const text = typeof content === "string" ? content : "";
     const usage = json.usage
       ? {
           promptTokens: json.usage.prompt_tokens,
@@ -80,6 +97,9 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
           totalTokens: json.usage.total_tokens,
         }
       : undefined;
+
+    // 3) Korjaa varaus toteutuneeseen käyttöön; ilman usagea varaus jää voimaan.
+    reservation.settle(usage ? (usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)) : undefined);
 
     return { text, model: json.model ?? opts.model, usage, raw: json };
   } catch (err) {

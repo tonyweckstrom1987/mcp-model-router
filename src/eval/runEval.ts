@@ -5,6 +5,8 @@ import type { AppConfig } from "../config/schema.js";
 import { callChatCompletion, type ChatMessage } from "../lib/openaiClient.js";
 import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
+import { budgetFor, type TokenBudget } from "../lib/budget.js";
+import { LimitExceededError, MAX_CALLS_PER_EVAL_RUN } from "../lib/limits.js";
 import { getEvalDirFromEnv, resolveEvalPromptPath } from "../lib/evalPath.js";
 
 const EvalPromptCaseSchema = z.object({
@@ -136,7 +138,7 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker:
   return results;
 }
 
-async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, responseText: string): Promise<number | null> {
+async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, responseText: string, budget: TokenBudget): Promise<number | null> {
   const judgeModel = config.eval.judge.model;
   if (!judgeModel) return null;
   const system =
@@ -157,6 +159,7 @@ async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, respon
       apiKey: config.provider.apiKey,
       model: resolveModelId(config.provider, judgeModel),
       timeoutMs: config.provider.timeoutMs,
+      budget,
       messages: [
         { role: "system", content: system },
         { role: "user", content: userPrompt },
@@ -268,6 +271,15 @@ export async function runEval(
   const runId = input.runId ?? randomUUID();
   const judgeUsed = input.judge ?? config.eval.judge.enabled;
 
+  // Kutsuraja tarkistetaan ENNEN kuin mitään kirjataan tai kutsutaan. Judge-kutsut lasketaan mukaan.
+  const plannedCalls = input.models.length * cases.length * (judgeUsed ? 2 : 1);
+  if (plannedCalls > MAX_CALLS_PER_EVAL_RUN) {
+    throw new LimitExceededError(
+      `run_eval tekisi ${plannedCalls} mallikutsua; yhdessä ajossa sallitaan enintään ${MAX_CALLS_PER_EVAL_RUN}. Ajoa ei aloitettu`,
+    );
+  }
+  const budget = budgetFor(db);
+
   // eval_run täytyy olla tallessa ennen eval_result-rivejä, koska
   // jälkimmäisillä on FOREIGN KEY -viittaus run_id:hin.
   db?.insertEvalRun({ runId, promptSetPath: input.promptSetPath, models: input.models, judgeUsed });
@@ -292,12 +304,13 @@ export async function runEval(
         model: resolveModelId(config.provider, model),
         messages,
         timeoutMs: config.provider.timeoutMs,
+        budget,
       });
       const latencyMs = Date.now() - start;
       const passed = testCase.expectedContains
         ? result.text.toLowerCase().includes(testCase.expectedContains.toLowerCase())
         : null;
-      const judgeScore = judgeUsed ? await judgeResponse(config, testCase, result.text) : null;
+      const judgeScore = judgeUsed ? await judgeResponse(config, testCase, result.text, budget) : null;
       const priceUsd = estimatePriceUsd(config, model, result.usage);
 
       const row: EvalCaseResult = {

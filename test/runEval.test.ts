@@ -97,11 +97,11 @@ describe("runEval", () => {
       .reply(200, {
         model: "model-a",
         choices: [{ message: { content: "vastaus" } }],
-        usage: { prompt_tokens: 1_000_000, completion_tokens: 1_000_000 },
+        usage: { prompt_tokens: 1000, completion_tokens: 1000 },
       });
 
     const config = baseConfig({
-      pricing: { "model-a": { inputPerMillionUsd: 1, outputPerMillionUsd: 2 } },
+      pricing: { "model-a": { inputPerMillionUsd: 1000, outputPerMillionUsd: 2000 } },
     });
 
     const report = await runEval(config, { promptSetPath: promptPath, models: ["model-a"] });

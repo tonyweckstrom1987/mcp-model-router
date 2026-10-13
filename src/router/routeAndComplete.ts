@@ -2,6 +2,8 @@ import type { AppConfig } from "../config/schema.js";
 import { callChatCompletion, type ChatMessage } from "../lib/openaiClient.js";
 import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
+import { budgetFor } from "../lib/budget.js";
+import { LimitExceededError } from "../lib/limits.js";
 
 export interface RouteAndCompleteInput {
   taskType: string;
@@ -57,6 +59,7 @@ export async function routeAndComplete(
     timeoutMs: route.timeoutMs ?? config.provider.timeoutMs,
     temperature: input.temperature,
     maxTokens: input.maxTokens,
+    budget: budgetFor(db),
   };
 
   try {
@@ -82,6 +85,8 @@ export async function routeAndComplete(
       usage: result.usage,
     };
   } catch (err) {
+    // Kustannuskaton ylitys ei saa johtaa varamalliin: kutsua ei tehty eikä sitä saa kiertää.
+    if (err instanceof LimitExceededError) throw err;
     primaryError = err instanceof Error ? err.message : String(err);
     if (!route.fallbackModel) {
       const latencyMs = Date.now() - start;

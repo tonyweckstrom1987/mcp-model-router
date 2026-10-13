@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
+import { LimitExceededError } from "./limits.js";
 
 /**
  * SQLite-kerros: säilytetään vain kutsuloki ja eval-tulokset.
@@ -87,6 +88,11 @@ export class Db {
         error_message TEXT,
         FOREIGN KEY (run_id) REFERENCES eval_run(run_id)
       );
+
+      CREATE TABLE IF NOT EXISTS token_budget (
+        day TEXT PRIMARY KEY,
+        reserved_tokens INTEGER NOT NULL
+      );
     `);
   }
 
@@ -152,6 +158,44 @@ export class Db {
 
   getEvalRunResults(runId: string): unknown[] {
     return this.db.prepare(`SELECT * FROM eval_result WHERE run_id = ? ORDER BY id ASC`).all(runId);
+  }
+
+  /**
+   * Varaa tokeneita päiväbudjetista yhdessä BEGIN IMMEDIATE -transaktiossa:
+   * tarkistus ja kirjaus ovat jakamaton kokonaisuus, joten rinnakkaiset
+   * kutsut (myös toisista prosesseista) eivät voi ohittaa rajaa.
+   */
+  reserveTokens(day: string, tokens: number, limit: number): void {
+    const run = this.db.transaction(() => {
+      const row = this.db.prepare(`SELECT reserved_tokens AS reserved FROM token_budget WHERE day = ?`).get(day) as
+        | { reserved: number }
+        | undefined;
+      const current = row?.reserved ?? 0;
+      if (!Number.isFinite(tokens) || tokens < 0 || current + tokens > limit) {
+        throw new LimitExceededError("Päiväkohtainen tokenibudjetti ylittyisi; kutsua ei tehty");
+      }
+      this.db
+        .prepare(
+          `INSERT INTO token_budget (day, reserved_tokens) VALUES (?, ?)
+           ON CONFLICT(day) DO UPDATE SET reserved_tokens = reserved_tokens + excluded.reserved_tokens`,
+        )
+        .run(day, tokens);
+    });
+    run.immediate();
+  }
+
+  /** Korjaa päivän varausta kutsun jälkeen toteutuneen käytön mukaan (delta voi olla negatiivinen). */
+  adjustReservedTokens(day: string, delta: number): void {
+    this.db
+      .prepare(`UPDATE token_budget SET reserved_tokens = MAX(0, reserved_tokens + ?) WHERE day = ?`)
+      .run(delta, day);
+  }
+
+  getReservedTokens(day: string): number {
+    const row = this.db.prepare(`SELECT reserved_tokens AS reserved FROM token_budget WHERE day = ?`).get(day) as
+      | { reserved: number }
+      | undefined;
+    return row?.reserved ?? 0;
   }
 
   close(): void {
