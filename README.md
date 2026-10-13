@@ -4,7 +4,7 @@
 
 > **English summary:** An MCP server that *complements* LiteLLM instead of replacing it. It (1) picks a model by task type from `config.yaml`, (2) reads usage and budget from LiteLLM or OpenRouter, and (3) runs the same prompt set across several models and compares cost, latency and quality. Works over stdio or streamable HTTP; SQLite stores only call logs and eval results. Details below in Finnish.
 
-**Teknologiat:** TypeScript, Node.js 20/22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
+**Teknologiat:** TypeScript, Node.js 22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
 
 **Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Kokeile ilman avainta](#kokeile-ilman-llm-avainta) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
 
@@ -101,7 +101,7 @@ Tehtävätyypeittäin määritellyt mallit:
 
 ## Asennus
 
-Vaatii Node.js 20, 22 tai 24.
+Vaatii Node.js 22.12 tai uudemman (22 tai 24).
 
 ```bash
 npm install
@@ -473,7 +473,7 @@ klienttisi dokumentaatio.
 
 Ei Dockeria - palvelin ajetaan suoraan Node-prosessina systemd-yksikkönä.
 
-1. Luo (tai käytä) Debian/Ubuntu-pohjainen LXC-kontti, asenna Node.js 20, 22 tai 24.
+1. Luo (tai käytä) Debian/Ubuntu-pohjainen LXC-kontti, asenna Node.js 22 tai 24.
 2. Kloonaa repo `/opt/mcp-model-router`-hakemistoon ja aja:
    ```bash
    cd /opt/mcp-model-router
