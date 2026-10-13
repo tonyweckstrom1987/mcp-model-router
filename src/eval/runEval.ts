@@ -5,6 +5,7 @@ import type { AppConfig } from "../config/schema.js";
 import { callChatCompletion, type ChatMessage } from "../lib/openaiClient.js";
 import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
+import { getEvalDirFromEnv, resolveEvalPromptPath } from "../lib/evalPath.js";
 
 const EvalPromptCaseSchema = z.object({
   id: z.string().min(1),
@@ -255,8 +256,15 @@ function summarizePerTaskType(models: string[], cases: EvalPromptCase[], results
  * vastauksen rinnakkain. Laatu arvioidaan yksinkertaisella
  * sisältää-tarkistuksella ja valinnaisella LLM-tuomarilla.
  */
-export async function runEval(config: AppConfig, input: RunEvalInput, db?: Db): Promise<EvalReport> {
-  const cases = loadPromptSet(input.promptSetPath);
+export async function runEval(
+  config: AppConfig,
+  input: RunEvalInput,
+  db?: Db,
+  options: { evalDir?: string } = { evalDir: getEvalDirFromEnv() },
+): Promise<EvalReport> {
+  // Polku tarkistetaan ennen kuin mitään luetaan tai kutsutaan.
+  const resolvedPath = resolveEvalPromptPath(input.promptSetPath, options.evalDir);
+  const cases = loadPromptSet(resolvedPath);
   const runId = input.runId ?? randomUUID();
   const judgeUsed = input.judge ?? config.eval.judge.enabled;
 
