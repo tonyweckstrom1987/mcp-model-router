@@ -24,6 +24,17 @@ export class LimitExceededError extends Error {
   }
 }
 
+export const EMPTY_RESPONSE_CODE = "vastaus_tyhja";
+
+/** Malli palautti tyhjän, vain välilyöntejä sisältävän tai puuttuvan vastauksen. */
+export class EmptyResponseError extends Error {
+  readonly code = EMPTY_RESPONSE_CODE;
+  constructor(model: string) {
+    super(`${EMPTY_RESPONSE_CODE}: malli '${model}' palautti tyhjän vastauksen`);
+    this.name = "EmptyResponseError";
+  }
+}
+
 /** Päivä (YYYY-MM-DD) budjetin kirjanpitoa varten, Europe/Helsinki-ajassa. */
 export function budgetDay(now: Date): string {
   return new Intl.DateTimeFormat("en-CA", {

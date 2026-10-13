@@ -5,7 +5,7 @@
  */
 
 import { estimateInputTokens, type TokenBudget } from "./budget.js";
-import { LimitExceededError, MAX_TOKENS_PER_CALL } from "./limits.js";
+import { EmptyResponseError, LimitExceededError, MAX_TOKENS_PER_CALL } from "./limits.js";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -100,6 +100,11 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
 
     // 3) Korjaa varaus toteutuneeseen käyttöön; ilman usagea varaus jää voimaan.
     reservation.settle(usage ? (usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)) : undefined);
+
+    // Tyhjä, pelkkää whitespacea oleva tai puuttuva (myös katkaistu tyhjäksi) vastaus ei ole onnistuminen.
+    if (text.trim() === "") {
+      throw new EmptyResponseError(opts.model);
+    }
 
     return { text, model: json.model ?? opts.model, usage, raw: json };
   } catch (err) {

@@ -6,7 +6,7 @@ import { callChatCompletion, type ChatMessage } from "../lib/openaiClient.js";
 import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
 import { budgetFor, type TokenBudget } from "../lib/budget.js";
-import { LimitExceededError, MAX_CALLS_PER_EVAL_RUN } from "../lib/limits.js";
+import { EmptyResponseError, LimitExceededError, MAX_CALLS_PER_EVAL_RUN } from "../lib/limits.js";
 import { getEvalDirFromEnv, resolveEvalPromptPath } from "../lib/evalPath.js";
 
 const EvalPromptCaseSchema = z.object({
@@ -328,17 +328,19 @@ export async function runEval(
     } catch (err) {
       const latencyMs = Date.now() - start;
       const message = err instanceof Error ? err.message : String(err);
+      // Tyhjä vastaus on aina epäonnistuminen (passed=false), ei "ei arvioitu" (null).
+      const passed = err instanceof EmptyResponseError ? false : null;
       const row: EvalCaseResult = {
         promptId: testCase.id,
         model,
         latencyMs,
         response: "",
-        passed: null,
+        passed,
         judgeScore: null,
         priceUsd: null,
         error: message,
       };
-      db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: "", passed: null, judgeScore: null, priceUsd: null, errorMessage: message });
+      db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: "", passed, judgeScore: null, priceUsd: null, errorMessage: message });
       return row;
     }
   });
