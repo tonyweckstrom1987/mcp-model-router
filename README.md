@@ -542,9 +542,13 @@ DELETE) vaatii otsakkeen `Authorization: Bearer <token>`.
   `{"status":"ok"}`.
 - Stdio-tila ei käytä tokenia (prosessi on paikallinen).
 - Token ei korvaa verkkotason rajausta: käytä edelleen Tailscale ACL:iä äläkä
-  kuuntele `0.0.0.0`:ssa. **HTTP ei salaa tokenia**, joten token kulkee
-  selkokielisenä: liikenne saa kulkea vain `127.0.0.1`:n tai Tailscalen
-  (WireGuard) kautta, ei koskaan avoimen verkon yli.
+  kuuntele `0.0.0.0`:ssa.
+- **Bearer-token kulkee HTTP:ssä salaamattomana.** Käytä HTTP-tilaa vain
+  Tailscalen (WireGuard) tai localhostin kautta, ei koskaan avoimen verkon yli.
+- **Tunnettu rajoitus:** MCP SDK:n Express-sovellus jäsentää JSON-rungon ennen
+  Bearer-tarkistusta, joten tunnistamaton pyyntö voi kuluttaa hieman
+  jäsentimen aikaa. Rungon koko on rajattu, ja palvelin kuuntelee oletuksena
+  vain `127.0.0.1`:ssä. Älä altista palvelinta julkiseen verkkoon.
 
 **`run_eval`-tiedostopolut (`EVAL_DIR`).** `run_eval` lukee prompt-tiedostoja
 vain yhdestä hakemistosta.
