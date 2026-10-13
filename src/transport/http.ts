@@ -2,12 +2,15 @@ import type { Server } from "node:http";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { assertValidAuthToken, bearerAuth } from "./auth.js";
 
 export interface HttpTransportOptions {
   host: string;
   port: number;
   /** Sallitut Host-otsikot DNS rebinding -suojausta varten (esim. Tailscale MagicDNS -nimi). */
   allowedHosts?: string[];
+  /** Pakollinen Bearer-token /mcp-päätepisteelle (vähintään 32 merkkiä). Ilman sitä palvelin ei käynnisty. */
+  authToken: string | undefined;
 }
 
 /**
@@ -16,7 +19,12 @@ export interface HttpTransportOptions {
  * kutsua samaa palvelinta samanaikaisesti Tailscale-verkon yli.
  */
 export function startHttpTransport(createServer: () => McpServer, options: HttpTransportOptions): Server {
+  // Fail closed: heittää ennen kuin mitään portteja avataan.
+  const authToken = assertValidAuthToken(options.authToken);
   const app = createMcpExpressApp({ host: options.host, allowedHosts: options.allowedHosts });
+
+  // Kattaa kaikki /mcp-metodit (POST, GET, DELETE); /healthz jää avoimeksi.
+  app.use("/mcp", bearerAuth(authToken));
 
   app.get("/healthz", (_req, res) => {
     res.status(200).json({ status: "ok" });
