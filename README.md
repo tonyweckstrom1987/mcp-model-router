@@ -542,8 +542,9 @@ DELETE) vaatii otsakkeen `Authorization: Bearer <token>`.
   `{"status":"ok"}`.
 - Stdio-tila ei käytä tokenia (prosessi on paikallinen).
 - Token ei korvaa verkkotason rajausta: käytä edelleen Tailscale ACL:iä äläkä
-  kuuntele `0.0.0.0`:ssa. Yhteys on salaamaton HTTP, joten token kulkee
-  selkokielisenä, ellei liikenne kulje Tailscalen (WireGuard) tai TLS:n yli.
+  kuuntele `0.0.0.0`:ssa. **HTTP ei salaa tokenia**, joten token kulkee
+  selkokielisenä: liikenne saa kulkea vain `127.0.0.1`:n tai Tailscalen
+  (WireGuard) kautta, ei koskaan avoimen verkon yli.
 
 **`run_eval`-tiedostopolut (`EVAL_DIR`).** `run_eval` lukee prompt-tiedostoja
 vain yhdestä hakemistosta.
@@ -590,7 +591,14 @@ npm test             # vitest, HTTP-kutsut mockattu undicilla
 
 - HTTP-tilan tunnistus on yksi jaettu Bearer-token (ei käyttäjä- tai
   agenttikohtaisia tunnuksia, ei tokenin kierrätystä ajon aikana), eikä
-  palvelin itse salaa liikennettä - käytä Tailscalea tai TLS-päätettä.
+  palvelin itse salaa liikennettä (HTTP ei salaa tokenia), joten liikenne
+  saa kulkea vain `127.0.0.1`:n tai Tailscalen kautta.
+- MCP SDK:n Express-sovellus jäsentää JSON-rungon ennen Bearer-tarkistusta,
+  joten tunnistamaton pyyntö ehtii kuluttaa hieman jäsennysaikaa (rungon koko
+  on rajattu). Tämä hyväksytään tietoisesti: oman Express-sovelluksen
+  kirjoittaminen SDK:n tilalle toisi enemmän omaa koodia ja riskiä kuin
+  hyötyä, ja palvelin kuuntelee oletuksena vain `127.0.0.1`:ssä (tai
+  Tailscalessa).
 - Päiväbudjetti on tokenipohjainen ja kattaa vain tämän palvelimen kautta
   tehdyt kutsut; se ei tiedä LiteLLM:n/OpenRouterin muista asiakkaista tulevaa
   kulutusta (`get_usage` näyttää sen).
