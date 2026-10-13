@@ -39,7 +39,9 @@ on ainakin `general`-tehtävän malli konfiguroitu):
 ```bash
 npm install && npm run build
 cp config.example.yaml config.yaml   # muokkaa tarpeen mukaan
-LLM_BASE_URL=http://localhost:4000 LLM_API_KEY=sk-... MCP_TRANSPORT=http MCP_HTTP_PORT=3100 npm start &
+read -s -p "LLM_API_KEY: " LLM_API_KEY; echo
+export LLM_API_KEY   # tai ympäristötiedostoon; älä kirjoita avainta komentoriville
+LLM_BASE_URL=http://localhost:4000 MCP_TRANSPORT=http MCP_HTTP_PORT=3100 npm start &
 curl -s -X POST http://127.0.0.1:3100/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}'
@@ -131,8 +133,8 @@ Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
 # stdio (esim. Claude Desktop / Cursor)
 npm start
 
-# streamable HTTP (muut kontit Tailscale-verkossa)
-MCP_TRANSPORT=http MCP_HTTP_HOST=0.0.0.0 MCP_HTTP_PORT=3100 npm start
+# streamable HTTP (oletus: vain tämä kone; muille Tailscale-kontteille aseta MCP_HTTP_HOST oman Tailscale-osoitteen mukaan, ei 0.0.0.0)
+MCP_TRANSPORT=http MCP_HTTP_HOST=127.0.0.1 MCP_HTTP_PORT=3100 npm start
 ```
 
 HTTP-tilassa palvelin vastaa osoitteessa `http://<host>:<port>/mcp` ja
