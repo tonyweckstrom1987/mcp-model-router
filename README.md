@@ -6,7 +6,7 @@
 
 **Teknologiat:** TypeScript, Node.js 22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
 
-**Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Kokeile ilman avainta](#kokeile-ilman-llm-avainta) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
+**Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Kokeile ilman avainta](#kokeile-ilman-llm-avainta) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tietoturva](#tietoturva) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
 
 MCP-palvelin, joka **täydentää LiteLLM:ää eikä korvaa sitä**. LiteLLM/OpenRouter
 hoitavat jo agenttikohtaiset avaimet ja kulukatot - tämä palvelin ei rakenna
@@ -41,8 +41,10 @@ npm install && npm run build
 cp config.example.yaml config.yaml   # muokkaa tarpeen mukaan
 read -s -p "LLM_API_KEY: " LLM_API_KEY; echo
 export LLM_API_KEY   # tai ympäristötiedostoon; älä kirjoita avainta komentoriville
+export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"   # pakollinen HTTP-tilassa, väh. 32 merkkiä
 LLM_BASE_URL=http://localhost:4000 MCP_TRANSPORT=http MCP_HTTP_PORT=3100 npm start &
 curl -s -X POST http://127.0.0.1:3100/mcp \
+  -H "Authorization: Bearer $MCP_AUTH_TOKEN" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}'
 ```
@@ -94,12 +96,14 @@ Tehtävätyypeittäin määritellyt mallit:
   ja streamable HTTP (jotta muut kontit tavoittavat palvelimen Tailscale-
   verkossa). HTTP-tila on tilaton (`sessionIdGenerator: undefined`) - jokainen
   pyyntö saa oman transport-instanssinsa, joten useat agentit voivat kutsua
-  palvelinta yhtäaikaisesti. Palvelin ei toteuta omaa kirjautumista - pääsy
-  rajataan verkkotasolla (Tailscale ACL:t).
+  palvelinta yhtäaikaisesti. `/mcp` vaatii Bearer-tokenin (`MCP_AUTH_TOKEN`),
+  ja verkkotason rajaus (Tailscale ACL:t) on sen lisäksi - ks.
+  [Tietoturva](#tietoturva).
 - **Konfiguraatio**: `config.yaml` (ympäristömuuttujaviittauksin, ei
   salaisuuksia tiedostossa) + varsinaiset arvot ympäristömuuttujista.
-- **Kontekstin kokoa ei rajoiteta keinotekoisesti** - `maxTokens` on
-  valinnainen parametri per kutsu, ei kovakoodattu yläraja.
+- **Kustannuskatot ovat kovakoodattuja** (`src/lib/limits.ts`): `maxTokens`
+  on valinnainen parametri, mutta sen yläraja on 4096 ja päiväkohtainen
+  tokenibudjetti rajaa kokonaiskulutuksen - ks. [Tietoturva](#tietoturva).
 
 ## Asennus
 
@@ -125,6 +129,8 @@ Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
 | `MCP_TRANSPORT`     | `stdio` tai `http`                                              | `stdio`                    |
 | `MCP_HTTP_HOST`     | HTTP-siirtotavan bind-osoite                                    | `127.0.0.1`                |
 | `MCP_HTTP_PORT`     | HTTP-siirtotavan portti (oletus vaihdettu 3100:aan, koska 3000 on usein varattu esim. Open WebUI:lle) | `3100`                     |
+| `MCP_AUTH_TOKEN`    | **Pakollinen HTTP-tilassa**: Bearer-token `/mcp`-päätepisteelle, vähintään 32 merkkiä. Ilman sitä palvelin ei käynnisty | (ei asetettu) |
+| `EVAL_DIR`          | Ainoa hakemisto, josta `run_eval` lukee prompt-tiedostoja (vain `.json`). Ilman tätä `run_eval` kieltäytyy | (ei asetettu) |
 | `MCP_ALLOWED_HOSTS` | Pilkulla eroteltu lista sallittuja Host-otsikoita (DNS-rebinding-suojaus) | (ei asetettu)      |
 
 ### Ajaminen
@@ -134,7 +140,8 @@ Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
 npm start
 
 # streamable HTTP (oletus: vain tämä kone; muille Tailscale-kontteille aseta MCP_HTTP_HOST oman Tailscale-osoitteen mukaan, ei 0.0.0.0)
-MCP_TRANSPORT=http MCP_HTTP_HOST=127.0.0.1 MCP_HTTP_PORT=3100 npm start
+# MCP_AUTH_TOKEN on pakollinen (väh. 32 merkkiä), esim. openssl rand -hex 32
+MCP_TRANSPORT=http MCP_HTTP_HOST=127.0.0.1 MCP_HTTP_PORT=3100 MCP_AUTH_TOKEN=... npm start
 ```
 
 HTTP-tilassa palvelin vastaa osoitteessa `http://<host>:<port>/mcp` ja
@@ -249,14 +256,16 @@ kokeilu](#nopea-kokeilu)). Esimerkki HTTP-tilassa, kahdella mallilla ja
 `eval-prompts.fi.json`-sarjalla:
 
 ```bash
+# palvelin käynnistetty ympäristömuuttujalla EVAL_DIR=/polku/mcp-model-router/examples
 curl -s -X POST http://127.0.0.1:3100/mcp \
+  -H "Authorization: Bearer $MCP_AUTH_TOKEN" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
   -d '{
     "jsonrpc":"2.0","id":1,"method":"tools/call",
     "params":{
       "name":"run_eval",
       "arguments":{
-        "promptSetPath":"examples/eval-prompts.fi.json",
+        "promptSetPath":"eval-prompts.fi.json",
         "models":["openrouter/deepseek/deepseek-v4.1-flash","openrouter/qwen/qwen3-flash"],
         "judge": false
       }
@@ -264,6 +273,8 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   }'
 ```
 
+- `promptSetPath` tulkitaan suhteessa `EVAL_DIR`-hakemistoon (ks.
+  [Tietoturva](#tietoturva)); polku hakemiston ulkopuolelle hylätään.
 - `models`-lista käyttää samoja LiteLLM `model_name`-aliaksia kuin
   `config.yaml`:n `tasks`-lohko (ks. [Tunnetut
   rajoitukset](#tunnetut-rajoitukset)) - ei tarvitse olla sama malli kuin
@@ -505,8 +516,67 @@ Ei Dockeria - palvelin ajetaan suoraan Node-prosessina systemd-yksikkönä.
 
 Yksikkö kuuntelee `MCP_HTTP_HOST`-osoitteessa (aseta env-tiedostoon kontin
 Tailscale-osoite `tailscale ip -4`), jolloin muut LXC-kontit tavoittavat
-palvelimen Tailscale-verkon yli ilman erillistä autentikointia - pääsy
-rajataan Tailscale ACL:eillä.
+palvelimen Tailscale-verkon yli. Env-tiedostossa täytyy olla `MCP_AUTH_TOKEN`
+(väh. 32 merkkiä), muuten palvelin ei käynnisty, ja clientien täytyy lähettää se
+Bearer-otsakkeessa. Aseta myös `EVAL_DIR`, jos käytät `run_eval`ia. Pääsy
+rajataan lisäksi Tailscale ACL:eillä.
+
+## Tietoturva
+
+Periaate: rajat ovat koodissa ja ne epäonnistuvat suljetusti (virhetilassa
+kielletään). Mitään alla olevista rajoista ei voi löysätä ympäristömuuttujalla,
+`config.yaml`:lla eikä työkalun parametrilla.
+
+**Bearer-tunnistus (`MCP_AUTH_TOKEN`).** HTTP-tilassa `/mcp` (POST, GET,
+DELETE) vaatii otsakkeen `Authorization: Bearer <token>`.
+
+- Palvelin **ei käynnisty** HTTP-tilassa, jos `MCP_AUTH_TOKEN` puuttuu tai on
+  alle 32 merkkiä. Luo token esim. `openssl rand -hex 32`.
+- Puuttuva otsake, väärä skeema ja väärä token antavat täsmälleen saman
+  401-vastauksen, joka ei paljasta syytä. Vertailu on vakioaikainen
+  (`crypto.timingSafeEqual` SHA-256-tiivisteillä, joten eri pituiset syötteet
+  eivät vuoda tietoa).
+- Tokenia ei kirjoiteta lokiin eikä virheilmoituksiin. Pidä se
+  ympäristötiedostossa (`chmod 600`), ei versionhallinnassa.
+- Oletus-bind on `127.0.0.1`. `/healthz` on avoin eikä palauta muuta kuin
+  `{"status":"ok"}`.
+- Stdio-tila ei käytä tokenia (prosessi on paikallinen).
+- Token ei korvaa verkkotason rajausta: käytä edelleen Tailscale ACL:iä äläkä
+  kuuntele `0.0.0.0`:ssa. Yhteys on salaamaton HTTP, joten token kulkee
+  selkokielisenä, ellei liikenne kulje Tailscalen (WireGuard) tai TLS:n yli.
+
+**`run_eval`-tiedostopolut (`EVAL_DIR`).** `run_eval` lukee prompt-tiedostoja
+vain yhdestä hakemistosta.
+
+- Jos `EVAL_DIR` ei ole asetettu, `run_eval` kieltäytyy kaikista poluista.
+- Polku ratkaistaan `realpath`illa ja verrataan hakemistoon: `../`-polut,
+  hakemiston ulkopuoliset absoluuttiset polut ja ulos johtavat symlinkit
+  hylätään. Suhteelliset polut tulkitaan `EVAL_DIR`:in suhteen.
+- Vain `.json`-päätteet (kirjainkoolla ei väliä), tarkistus `realpath`in jälkeen.
+- Hylkäysviesti on aina sama eikä sisällä polkua.
+
+**Kustannuskatot** (vakiot tiedostossa [`src/lib/limits.ts`](./src/lib/limits.ts),
+tarkistus `callChatCompletion`issa, joten ne kattavat `route_and_complete`n,
+`run_eval`in ja judgen):
+
+| Raja | Arvo | Käytös |
+|------|------|--------|
+| `max_tokens` per kutsu | 4096 | Suurempi pyydetty `maxTokens` **hylätään virheellä** (ei pienennetä hiljaa). Jos arvoa ei anneta, rajapinnalle lähetetään 4096. |
+| Mallikutsuja per `run_eval` | 200 | Lasketaan mallit × promptit (× 2, jos judge on päällä). Ylitys hylätään ennen ensimmäistä kutsua. |
+| Päiväbudjetti | 1 000 000 tokenia / päivä | Päivä on `Europe/Helsinki`-ajassa. |
+
+Päiväbudjetti toimii varausperiaatteella: ennen jokaista kutsua varataan
+syötteen arvio + `max_tokens` SQLiten `token_budget`-taulusta
+`BEGIN IMMEDIATE` -transaktiossa (tarkistus ja varaus ovat jakamaton
+kokonaisuus, joten rinnakkaiset kutsut eivät ohita rajaa). Kutsun jälkeen
+varaus korjataan vastauksen `usage`-arvoon. Jos `usage` puuttuu, varaus jää
+voimaan. Epäonnistunut ja tyhjä vastaus kuluttavat budjettia. Budjetin ylitys
+ei käynnistä varamallia. Rajan muuttaminen vaatii koodimuutoksen.
+
+**Tyhjät vastaukset.** Tyhjä, vain välilyöntejä sisältävä tai puuttuva
+vastaus on virhe `vastaus_tyhja`, ei onnistuminen. `run_eval`issa se on
+epäonnistunut tapaus (`passed: false`, `error` alkaa `vastaus_tyhja`) ja
+lasketaan läpäisyprosentin nimittäjään.
 
 ## Kehitys
 
@@ -518,8 +588,14 @@ npm test             # vitest, HTTP-kutsut mockattu undicilla
 
 ## Tunnetut rajoitukset
 
-- Ei omaa autentikointia HTTP-siirtotavalle (luotetaan verkkotason
-  rajaukseen, esim. Tailscale).
+- HTTP-tilan tunnistus on yksi jaettu Bearer-token (ei käyttäjä- tai
+  agenttikohtaisia tunnuksia, ei tokenin kierrätystä ajon aikana), eikä
+  palvelin itse salaa liikennettä - käytä Tailscalea tai TLS-päätettä.
+- Päiväbudjetti on tokenipohjainen ja kattaa vain tämän palvelimen kautta
+  tehdyt kutsut; se ei tiedä LiteLLM:n/OpenRouterin muista asiakkaista tulevaa
+  kulutusta (`get_usage` näyttää sen).
+- Syötteen tokenimäärä on arvio (merkkimäärä / 3); varaus korjataan
+  toteutuneeseen `usage`-arvoon vasta kutsun jälkeen.
 - Ei automaattista mallilistan hakua LiteLLM:n `/models`-rajapinnasta -
   `list_models` lukee vain `config.yaml`:n.
 - Eval-hinta-arvio perustuu `config.yaml`:n `eval.pricing`-hinnastoon, ei

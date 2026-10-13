@@ -209,9 +209,20 @@ describe("kustannuskatot", () => {
 
     it("route_and_complete: budjetin ylitys ei laukaise varamallia", async () => {
       createTokenBudget(db).reserve(DAILY_TOKEN_BUDGET);
+      const spy = vi.spyOn(db, "reserveTokens");
       await expect(routeAndComplete(config(), { taskType: "general", prompt: "hei" }, db)).rejects.toBeInstanceOf(
         LimitExceededError,
       );
+      // Vain päämallin varausyritys; varamallille ei yritetä lainkaan
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    it("route_and_complete: liian suuri maxTokens ei yritä varausta eikä varamallia lainkaan", async () => {
+      const spy = vi.spyOn(db, "reserveTokens");
+      await expect(
+        routeAndComplete(config(), { taskType: "general", prompt: "hei", maxTokens: MAX_TOKENS_PER_CALL + 1 }, db),
+      ).rejects.toBeInstanceOf(LimitExceededError);
+      expect(spy).not.toHaveBeenCalled();
     });
 
     describe("run_eval kutsuraja", () => {
