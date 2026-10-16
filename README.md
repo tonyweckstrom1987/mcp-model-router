@@ -248,6 +248,12 @@ Laajempi, 15-20 suomenkielisen promptin esimerkkisarja neljälle tehtävätyypil
 (yleinen tieto, koodaus, kirjoitus/tiivistys, tehtävän pilkkominen) löytyy
 tiedostosta [`examples/eval-prompts.fi.json`](./examples/eval-prompts.fi.json).
 
+**Prompt-tiedostojen tarkistus (evalkit):** `npm run eval:validate` tarkistaa esimerkkitiedostot
+[evalkit](https://github.com/tonyweckstrom1987/evalkit)-työkalulla ilman verkkokutsuja ja kuluja
+(muoto, kaksoisid:t, virheelliset lausekkeet). CI ajaa sen jokaisella pushilla, joten rikkinäinen
+prompt-tiedosto huomataan ennen kuin `run_eval` kohtaa sen. evalkit lukee tämän taulukkomuodon
+(`expectedContains`, `category`) sellaisenaan.
+
 ### Eval-ajo (`run_eval`)
 
 `run_eval` on MCP-työkalu, ei erillinen CLI-komento - se kutsutaan samalla
