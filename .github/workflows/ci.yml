@@ -32,13 +32,27 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Tarkista eval-prompt-tiedostot (evalkit, ei verkkokutsuja)
-        run: npm run eval:validate
-      - name: Toista tallennetut mallivastaukset ja vertaa baselineen (evalkit, ei verkkokutsuja)
-        run: npm run eval:replay
-
       - name: Testit
         run: npm test
 
       - name: Audit
         run: npm audit --omit=dev --audit-level=high
+
+      # evalkit-Action asettaa Node 24:n, joten se ajetaan viimeisenä ja vain Node 24 -rivillä (matriisi pysyy koskemattomana).
+      - name: Tarkista eval-prompt-tiedostot (evalkit-Action, ei verkkokutsuja)
+        if: matrix.node-version == 24
+        uses: tonyweckstrom1987/evalkit@79afb7cbdab0abb948eecfeb9c8f35135b27a507
+        with:
+          mode: validate
+          eval-set: examples/eval-prompts.example.json examples/eval-prompts.fi.json
+
+      - name: Toista tallennetut mallivastaukset ja vertaa baselineen (evalkit-Action, ei verkkokutsuja)
+        if: matrix.node-version == 24
+        uses: tonyweckstrom1987/evalkit@79afb7cbdab0abb948eecfeb9c8f35135b27a507
+        with:
+          eval-set: examples/eval-prompts.fi.json
+          models: deepseek-flash
+          base-url: https://litellm.example/v1
+          max-tokens: "2048"
+          baseline: test/cassettes/fi.baseline.json
+          cassette: test/cassettes/fi.json
