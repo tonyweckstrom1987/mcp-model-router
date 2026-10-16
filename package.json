@@ -29,13 +29,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
     "better-sqlite3": "^12.11.1",
-    "express": "^4.21.2",
+    "express": "^5.3.0",
     "js-yaml": "^5.4.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.5",
     "evalkit": "git+https://github.com/tonyweckstrom1987/evalkit.git#8f7a3c08fdf5aebf91ee96f292864c5776f2a667",
