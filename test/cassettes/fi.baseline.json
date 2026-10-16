@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "results": {
+    "deepseek-flash::kirjoitus-01": false,
+    "deepseek-flash::kirjoitus-02": true,
+    "deepseek-flash::kirjoitus-03": true,
+    "deepseek-flash::kirjoitus-04": false,
+    "deepseek-flash::kirjoitus-05": true,
+    "deepseek-flash::koodaus-01": true,
+    "deepseek-flash::koodaus-02": true,
+    "deepseek-flash::koodaus-03": true,
+    "deepseek-flash::koodaus-04": true,
+    "deepseek-flash::koodaus-05": true,
+    "deepseek-flash::pilkkominen-01": false,
+    "deepseek-flash::pilkkominen-02": false,
+    "deepseek-flash::pilkkominen-03": false,
+    "deepseek-flash::pilkkominen-04": false,
+    "deepseek-flash::pilkkominen-05": false,
+    "deepseek-flash::yleinen-01": true,
+    "deepseek-flash::yleinen-02": true,
+    "deepseek-flash::yleinen-03": true,
+    "deepseek-flash::yleinen-04": true,
+    "deepseek-flash::yleinen-05": true
+  }
+}

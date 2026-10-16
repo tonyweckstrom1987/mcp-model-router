@@ -254,6 +254,14 @@ tiedostosta [`examples/eval-prompts.fi.json`](./examples/eval-prompts.fi.json).
 prompt-tiedosto huomataan ennen kuin `run_eval` kohtaa sen. evalkit lukee tämän taulukkomuodon
 (`expectedContains`, `category`) sellaisenaan.
 
+**Tallennetut vastaukset (llm-cassette):** `test/cassettes/fi.json` sisältää oikean mallin (`deepseek-flash`)
+vastaukset 20 promptiin, ja `test/cassettes/fi.baseline.json` on niistä lasketut tulokset. `npm run eval:replay`
+toistaa vastaukset ilman verkkoa ja avainta ja vertaa baselineen; CI ajaa sen, joten arviointilogiikan
+regressio (esim. tarkistusten muutos) kaatuu CI:ssä. Uusi tallennus (vaatii oman LiteLLM-avaimen, kuluu senttejä):
+aseta `EVALKIT_BASE_URL`, `EVALKIT_MODELS` ja `LLM_API_KEY`, aja `npm run eval:record` ja sen jälkeen
+`npm run eval:anonymize`, joka korvaa oikean osoitteen paikkamerkillä ja kieltäytyy, jos kasetissa on `ts.net`
+tai avaimen näköinen merkkijono.
+
 ### Eval-ajo (`run_eval`)
 
 `run_eval` on MCP-työkalu, ei erillinen CLI-komento - se kutsutaan samalla

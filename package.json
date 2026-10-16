@@ -24,7 +24,10 @@
     "test:watch": "vitest",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "eval:validate": "evalkit validate examples/eval-prompts.example.json examples/eval-prompts.fi.json"
+    "eval:validate": "evalkit validate examples/eval-prompts.example.json examples/eval-prompts.fi.json",
+    "eval:record": "evalkit run examples/eval-prompts.fi.json --cassette test/cassettes/fi.json --cassette-mode record --baseline test/cassettes/fi.baseline.json --update-baseline",
+    "eval:anonymize": "node scripts/anonymize-cassette.mjs test/cassettes/fi.json",
+    "eval:replay": "evalkit run examples/eval-prompts.fi.json --cassette test/cassettes/fi.json --baseline test/cassettes/fi.baseline.json --models deepseek-flash --base-url https://litellm.example/v1"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
