@@ -45,7 +45,7 @@
     "llm-cassette": "git+https://github.com/tonyweckstrom1987/llm-cassette.git#21f1ffdd1bc730537826aa93317bd8cc6dec051e",
     "tsx": "^4.19.2",
     "typescript": "^7.0.2",
-    "undici": "^7.2.0",
+    "undici": "^7.30.1",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"
   }
