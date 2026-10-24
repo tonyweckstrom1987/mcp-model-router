@@ -80,7 +80,7 @@ export const AppConfigSchema = z.object({
       message: "config.yaml: kohdassa 'tasks' täytyy olla vähintään yksi tehtävätyyppi",
     }),
   usage: UsageConfigSchema,
-  eval: EvalConfigSchema.default({ judge: { enabled: false }, pricing: {} }),
+  eval: EvalConfigSchema.prefault({ judge: { enabled: false }, pricing: {} }),
   database: DatabaseConfigSchema.default({ path: "./data/mcp-model-router.sqlite" }),
 });
 export type AppConfig = z.infer<typeof AppConfigSchema>;
