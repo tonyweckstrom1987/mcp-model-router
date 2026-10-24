@@ -1,6 +1,6 @@
 {
   "name": "mcp-model-router",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP-palvelin, joka valitsee mallin tehtävätyypin mukaan, näyttää LiteLLM/OpenRouter-kulutuksen ja vertailee malleja eval-ajoilla. Täydentää LiteLLM:ää, ei korvaa sitä.",
   "license": "MIT",
   "type": "module",
