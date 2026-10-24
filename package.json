@@ -4,7 +4,7 @@
   "description": "MCP-palvelin, joka valitsee mallin tehtävätyypin mukaan, näyttää LiteLLM/OpenRouter-kulutuksen ja vertailee malleja eval-ajoilla. Täydentää LiteLLM:ää, ei korvaa sitä.",
   "license": "MIT",
   "type": "module",
-  "private": true,
+  "private": false,
   "engines": {
     "node": "^22.12.0 || ^24.0.0"
   },
@@ -27,7 +27,8 @@
     "eval:validate": "evalkit validate examples/eval-prompts.example.json examples/eval-prompts.fi.json",
     "eval:record": "evalkit run examples/eval-prompts.fi.json --cassette test/cassettes/fi.json --cassette-mode record --baseline test/cassettes/fi.baseline.json --update-baseline --max-tokens 2048",
     "eval:anonymize": "node scripts/anonymize-cassette.mjs test/cassettes/fi.json",
-    "eval:replay": "evalkit run examples/eval-prompts.fi.json --cassette test/cassettes/fi.json --baseline test/cassettes/fi.baseline.json --models deepseek-flash --base-url https://litellm.example/v1 --max-tokens 2048"
+    "eval:replay": "evalkit run examples/eval-prompts.fi.json --cassette test/cassettes/fi.json --baseline test/cassettes/fi.baseline.json --models deepseek-flash --base-url https://litellm.example/v1 --max-tokens 2048",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.1",
@@ -48,5 +49,27 @@
     "undici": "^7.2.0",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"
+  },
+  "author": "tonyweckstrom1987",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonyweckstrom1987/mcp-model-router.git"
+  },
+  "homepage": "https://github.com/tonyweckstrom1987/mcp-model-router#readme",
+  "bugs": {
+    "url": "https://github.com/tonyweckstrom1987/mcp-model-router/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "litellm",
+    "openrouter",
+    "llm",
+    "model-routing",
+    "eval"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

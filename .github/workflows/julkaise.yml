@@ -1,0 +1,32 @@
+name: Julkaise npm:iin
+
+# Ajetaan vain kun GitHubissa julkaistaan release. npm Trusted Publishing (OIDC) + provenance: ei salaisuuksia repossa.
+# Ennen ensimmaista julkaisua: npmjs.com -> paketin Settings -> Trusted Publisher -> GitHub Actions
+# (omistaja tonyweckstrom1987, repo mcp-model-router, workflow julkaise.yml, environment npm).
+# Ensimmainen julkaisu (paketti ei viela ole olemassa) pitaa tehda kerran kasin: npm publish --access public.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  julkaise:
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: npm publish --provenance --access public
