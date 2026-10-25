@@ -1,0 +1,47 @@
+name: Dependabot automerge
+
+# Dependabotin patch- ja minor-päivitykset yhdistetään automaattisesti, kun CI on vihreä.
+# Major-päivitykset (ja 0.x-versioiden minor-päivitykset) jäävät ihmisen tarkistettaviksi.
+# Ei kolmannen osapuolen actioneita, ei PR-koodin ajoa: vain otsikon versionumerot luetaan.
+# Vaatii: repon asetuksissa Allow auto-merge + haarasuojaus (vaaditut tarkistukset).
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Päätä onko päivitys turvallinen automergelle
+        id: paatos
+        env:
+          OTSIKKO: ${{ github.event.pull_request.title }}
+        run: |
+          # Odotettu muoto: "Bump <paketti> from <x.y.z> to <a.b.c>"
+          if [[ "$OTSIKKO" =~ [Bb]ump\ .+\ from\ v?([0-9]+)\.([0-9]+)\.([0-9]+)[^\ ]*\ to\ v?([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            ma=${BASH_REMATCH[1]}; mia=${BASH_REMATCH[2]}
+            mb=${BASH_REMATCH[4]}; mib=${BASH_REMATCH[5]}
+            if [ "$ma" = "$mb" ] && { [ "$ma" != "0" ] || [ "$mia" = "$mib" ]; }; then
+              echo "automerge=true" >> "$GITHUB_OUTPUT"
+              echo "Patch/minor-päivitys: automerge."
+            else
+              echo "automerge=false" >> "$GITHUB_OUTPUT"
+              echo "Major (tai 0.x minor) -päivitys: jää ihmiselle."
+            fi
+          else
+            echo "automerge=false" >> "$GITHUB_OUTPUT"
+            echo "Otsikkoa ei tunnistettu: jää ihmiselle."
+          fi
+
+      - name: Kytke automerge päälle (odottaa vaaditut tarkistukset)
+        if: steps.paatos.outputs.automerge == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
