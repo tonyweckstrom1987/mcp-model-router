@@ -32,7 +32,7 @@ kulutuksen tai budjetin kirjanpitoon.
 
 ## Nopea kokeilu
 
-Neljällä komennolla ensimmäinen `route_and_complete`-kutsu HTTP-tilassa
+Ensimmäinen `route_and_complete`-kutsu HTTP-tilassa
 (oleta, että LiteLLM pyörii jo osoitteessa `http://localhost:4000` ja siinä
 on ainakin `general`-tehtävän malli konfiguroitu):
 
@@ -49,7 +49,7 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}'
 ```
 
-Neljäs komento tekee `tools/call`-pyynnön palvelimen `/mcp`-päätepisteeseen ja
+Viimeinen komento (`curl`) tekee `tools/call`-pyynnön palvelimen `/mcp`-päätepisteeseen ja
 tulostaa vastauksen (streamable HTTP -tapahtumavirtana). Tarkemmat
 ympäristömuuttujat, `stdio`-siirtotapa ja `GET /healthz` -terveystarkastus:
 ks. [Asennus](#asennus) ja [Ajaminen](#ajaminen).
@@ -57,6 +57,8 @@ ks. [Asennus](#asennus) ja [Ajaminen](#ajaminen).
 ## Kokeile ilman LLM-avainta
 
 `list_models` lukee vain `config.yaml`:n, joten sen voi kokeilla ilman LiteLLM:ää tai API-avainta. Stdio-tilassa palvelin lukee JSON-RPC-viestit stdinistä (`sleep 2` pitää putken auki, kunnes vastaus on tullut):
+
+Komento käyttää `dist/index.js`:ää, joten aja ensin `npm install && npm run build` (ks. [Asennus](#asennus)).
 
 ```bash
 cp config.example.yaml config.yaml
