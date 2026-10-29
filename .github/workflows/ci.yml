@@ -41,14 +41,14 @@ jobs:
       # evalkit-Action asettaa Node 24:n, joten se ajetaan viimeisenä ja vain Node 24 -rivillä (matriisi pysyy koskemattomana).
       - name: Tarkista eval-prompt-tiedostot (evalkit-Action, ei verkkokutsuja)
         if: matrix.node-version == 24
-        uses: tonyweckstrom1987/evalkit@79afb7cbdab0abb948eecfeb9c8f35135b27a507
+        uses: tonyweckstrom1987/evalkit@29262f88e61448c8adfc6beaf26e745e844c05c5
         with:
           mode: validate
           eval-set: examples/eval-prompts.example.json examples/eval-prompts.fi.json
 
       - name: Toista tallennetut mallivastaukset ja vertaa baselineen (evalkit-Action, ei verkkokutsuja)
         if: matrix.node-version == 24
-        uses: tonyweckstrom1987/evalkit@79afb7cbdab0abb948eecfeb9c8f35135b27a507
+        uses: tonyweckstrom1987/evalkit@29262f88e61448c8adfc6beaf26e745e844c05c5
         with:
           eval-set: examples/eval-prompts.fi.json
           models: deepseek-flash
