@@ -607,6 +607,13 @@ npm run typecheck    # tsc --noEmit
 npm test             # vitest, HTTP-kutsut mockattu undicilla
 ```
 
+CI ajaa lisäksi [mcp-doctorin](https://github.com/tonyweckstrom1987/mcp-doctor) (MCP-kättely, työkalujen skeemat ja verkoton savuajo `test/mcp-doctor/smoke.json`). Paikallisesti:
+
+```bash
+npm run build
+CONFIG_PATH=$PWD/config.example.yaml npx @tonyweckstrom/mcp-doctor --env CONFIG_PATH --strict --smoke test/mcp-doctor/smoke.json -- node dist/index.js
+```
+
 ## Tunnetut rajoitukset
 
 - HTTP-tilan tunnistus on yksi jaettu Bearer-token (ei käyttäjä- tai
