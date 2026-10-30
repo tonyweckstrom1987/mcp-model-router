@@ -272,6 +272,10 @@ tavalla kuin muutkin työkalut (`tools/call`, ks. [Nopea
 kokeilu](#nopea-kokeilu)). Esimerkki HTTP-tilassa, kahdella mallilla ja
 `eval-prompts.fi.json`-sarjalla:
 
+Mallit rajataan: `run_eval` hyväksyy vain `config.yaml`:n `tasks`-osion mallit (`model`,
+`fallbackModel`) ja listan `eval.allowedModels`. Muu malli hylätään ennen yhtään kutsua, jotta
+tokenin haltija ei voi ohjata kutsuja proxyn kalleimpaan malliin.
+
 ```bash
 # palvelin käynnistetty ympäristömuuttujalla EVAL_DIR=/polku/mcp-model-router/examples
 curl -s -X POST http://127.0.0.1:3100/mcp \
