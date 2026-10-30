@@ -56,3 +56,16 @@ jobs:
           max-tokens: "2048"
           baseline: test/cassettes/fi.baseline.json
           cassette: test/cassettes/fi.json
+
+      # Oma tyokalu tyossa: mcp-doctor kaynnistaa palvelimen stdio-tilassa, tarkistaa kattelyn ja tyokalujen skeemat
+      # ja ajaa savuajon (vain verkottomat kutsut; virhepolut expectError). Node 24 -rivi, koska Action asettaa Node 24:n.
+      - name: MCP-terveystarkastus (mcp-doctor-Action)
+        if: matrix.node-version == 24
+        uses: tonyweckstrom1987/mcp-doctor@6a5f09575dcda006cd661a9906278b42f8ea336e # v0.3.0
+        env:
+          CONFIG_PATH: ${{ github.workspace }}/config.example.yaml
+        with:
+          command: node dist/index.js
+          smoke: test/mcp-doctor/smoke.json
+          strict: "true"
+          env-names: CONFIG_PATH

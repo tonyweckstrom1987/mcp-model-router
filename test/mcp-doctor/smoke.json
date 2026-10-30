@@ -1,0 +1,8 @@
+{
+  "calls": [
+    { "tool": "list_models", "arguments": {} },
+    { "tool": "list_models", "arguments": { "taskType": "ei-ole-olemassa" }, "expectError": true },
+    { "tool": "run_eval", "arguments": { "promptSetPath": "../../etc/passwd", "models": ["m"] }, "expectError": true },
+    { "tool": "route_and_complete", "arguments": { "prompt": "" }, "expectError": true }
+  ]
+}
