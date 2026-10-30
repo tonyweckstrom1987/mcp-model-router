@@ -13,7 +13,7 @@ function baseConfig(overrides: Partial<AppConfig["eval"]> = {}): AppConfig {
     provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000, kind: "litellm" },
     tasks: { general: { model: "m1" } },
     usage: { provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "" },
-    eval: { judge: { enabled: false }, pricing: {}, concurrency: 4, ...overrides },
+    eval: { judge: { enabled: false }, pricing: {}, concurrency: 4, allowedModels: ["model-a", "model-b"], ...overrides },
     database: { path: ":memory:" },
   };
 }
@@ -245,5 +245,30 @@ describe("runEval", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe("run_eval: sallitut mallit (katselmointi 28.10., löydös 3)", () => {
+  it("hylkää mallin, joka ei ole tasks-osiossa eikä eval.allowedModels-listalla, ennen kutsuja ja kirjauksia", async () => {
+    const config = {
+      server: { name: "t", version: "0" },
+      provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 1000, kind: "litellm" as const },
+      tasks: { general: { model: "m1", fallbackModel: "m2" } },
+      usage: { provider: "litellm" as const, baseUrl: "http://litellm.local:4000", apiKey: "" },
+      eval: { judge: { enabled: false }, pricing: {}, concurrency: 1, allowedModels: ["vertailu-x"] },
+      database: { path: ":memory:" },
+    };
+    await expect(
+      runEval(config, { promptSetPath: "/ei/ole/olemassa.json", models: ["m1", "kallis-malli"] }, undefined, { evalDir: "/tmp" }),
+    ).rejects.toThrow(/eivät ole sallittuja: kallis-malli/);
+  });
+
+  it("sallii tasks-osion päämallin, varamallin ja eval.allowedModels-listan mallit", async () => {
+    const { allowedEvalModels } = await import("../src/eval/runEval.js");
+    const s = allowedEvalModels({
+      tasks: { a: { model: "m1", fallbackModel: "m2" }, b: { model: "m3" } },
+      eval: { allowedModels: ["x"] },
+    } as never);
+    expect([...s].sort()).toEqual(["m1", "m2", "m3", "x"]);
   });
 });

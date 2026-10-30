@@ -98,7 +98,7 @@ describe("resolveEvalPromptPath", () => {
       provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 1000, kind: "litellm" },
       tasks: { general: { model: "m1" } },
       usage: { provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "" },
-      eval: { judge: { enabled: false }, pricing: {}, concurrency: 1 },
+      eval: { judge: { enabled: false }, pricing: {}, concurrency: 1, allowedModels: ["m"] },
       database: { path: ":memory:" },
     } as AppConfig;
     await expect(

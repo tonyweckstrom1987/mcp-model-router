@@ -59,6 +59,10 @@ export const EvalConfigSchema = z.object({
   // sitä, että liian suuri rinnakkaisuus voi ylikuormittaa LiteLLM-proxyn
   // tai OpenRouterin rate limitit.
   concurrency: z.number().int().min(1).default(4),
+  // run_eval sallii oletuksena vain tasks-osion mallit (model ja fallbackModel). Tähän voi lisätä
+  // vertailuun muita malleja. Ilman listaa kuka tahansa tokenin haltija voisi ohjata kutsut
+  // proxyn kalleimpaan malliin (katselmointi 28.10.2026, löydös 3).
+  allowedModels: z.array(z.string().min(1)).default([]),
 });
 export type EvalConfig = z.infer<typeof EvalConfigSchema>;
 

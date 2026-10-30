@@ -85,6 +85,9 @@ eval:
   # odottavat pääosin verkkovastausta - liian suuri arvo voi kuitenkin
   # ylikuormittaa LiteLLM-proxyn tai OpenRouterin rate limitit.
   concurrency: 4
+  # run_eval sallii oletuksena vain tasks-osion mallit (model, fallbackModel).
+  # Lisää tähän muut vertailtavat mallit:
+  # allowedModels: [openrouter/anthropic/claude-haiku-5-5]
   # Valinnainen hinnasto $/miljoona tokenia eval-raportin hinta-arviota
   # varten (LiteLLM/OpenRouter näyttävät jo toteutuneen kulutuksen -
   # tämä on vain vertailua varten eval-ajon sisällä).
