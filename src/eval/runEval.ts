@@ -8,6 +8,7 @@ import type { Db } from "../lib/db.js";
 import { budgetFor, type TokenBudget } from "../lib/budget.js";
 import { EmptyResponseError, LimitExceededError, MAX_CALLS_PER_EVAL_RUN } from "../lib/limits.js";
 import { getEvalDirFromEnv, resolveEvalPromptPath } from "../lib/evalPath.js";
+import { logEvalResultSafely } from "../lib/safeLog.js";
 
 const EvalPromptCaseSchema = z.object({
   id: z.string().min(1),
@@ -323,7 +324,7 @@ export async function runEval(
         priceUsd,
         error: null,
       };
-      db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: row.response, passed, judgeScore, priceUsd, errorMessage: null });
+      logEvalResultSafely(db, { runId, promptId: row.promptId, model, latencyMs, response: row.response, passed, judgeScore, priceUsd, errorMessage: null });
       return row;
     } catch (err) {
       const latencyMs = Date.now() - start;
@@ -340,7 +341,7 @@ export async function runEval(
         priceUsd: null,
         error: message,
       };
-      db?.insertEvalResult({ runId, promptId: row.promptId, model, latencyMs, response: "", passed, judgeScore: null, priceUsd: null, errorMessage: message });
+      logEvalResultSafely(db, { runId, promptId: row.promptId, model, latencyMs, response: "", passed, judgeScore: null, priceUsd: null, errorMessage: message });
       return row;
     }
   });
