@@ -51,7 +51,7 @@ describe("run_eval: LLM-tuomari", () => {
       provider: { baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 5000, kind: "litellm" },
       tasks: { general: { model: "m1" } },
       usage: { provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "" },
-      eval: { judge: { enabled: true, model: "judge-model", ...judgeOverrides }, pricing: {}, concurrency: 1 },
+      eval: { judge: { enabled: true, model: "judge-model", ...judgeOverrides }, pricing: {}, concurrency: 1, allowedModels: ["model-a"] },
       database: { path: ":memory:" },
     } as AppConfig;
   }
