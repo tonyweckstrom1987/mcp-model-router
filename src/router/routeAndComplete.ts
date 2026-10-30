@@ -4,6 +4,7 @@ import { resolveModelId } from "../lib/modelId.js";
 import type { Db } from "../lib/db.js";
 import { budgetFor } from "../lib/budget.js";
 import { LimitExceededError } from "../lib/limits.js";
+import { logCallSafely } from "../lib/safeLog.js";
 
 export interface RouteAndCompleteInput {
   taskType: string;
@@ -65,7 +66,7 @@ export async function routeAndComplete(
   try {
     const result = await callChatCompletion({ ...callOpts, model: resolveModelId(config.provider, route.model) });
     const latencyMs = Date.now() - start;
-    db?.insertCallLog({
+    logCallSafely(db, {
       taskType: input.taskType,
       modelRequested: route.model,
       modelUsed: route.model,
@@ -90,7 +91,7 @@ export async function routeAndComplete(
     primaryError = err instanceof Error ? err.message : String(err);
     if (!route.fallbackModel) {
       const latencyMs = Date.now() - start;
-      db?.insertCallLog({
+      logCallSafely(db, {
         taskType: input.taskType,
         modelRequested: route.model,
         modelUsed: route.model,
@@ -112,7 +113,7 @@ export async function routeAndComplete(
     if (err instanceof LimitExceededError) throw err;
     const fallbackError = err instanceof Error ? err.message : String(err);
     const combined = `Päämalli '${route.model}' epäonnistui: ${primaryError}. Varamalli '${route.fallbackModel}' epäonnistui: ${fallbackError}`;
-    db?.insertCallLog({
+    logCallSafely(db, {
       taskType: input.taskType,
       modelRequested: route.model,
       modelUsed: route.fallbackModel!,
@@ -124,7 +125,7 @@ export async function routeAndComplete(
     throw new Error(combined);
   }
   const latencyMs = Date.now() - start;
-  db?.insertCallLog({
+  logCallSafely(db, {
     taskType: input.taskType,
     modelRequested: route.model,
     modelUsed: route.fallbackModel!,
