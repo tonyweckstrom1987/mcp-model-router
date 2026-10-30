@@ -152,6 +152,7 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
             `viive ka. ${m.avgLatencyMs.toFixed(0)} ms`,
             m.passRate !== null ? `läpäisy ${(m.passRate * 100).toFixed(0)}%` : null,
             m.avgJudgeScore !== null ? `tuomari ka. ${m.avgJudgeScore.toFixed(2)}/5` : null,
+            m.judgeErrorCount > 0 ? `tuomaripiste puuttuu ${m.judgeErrorCount}/${m.caseCount}` : null,
             m.avgPriceUsd !== null ? `hinta ka. ${m.avgPriceUsd.toFixed(6)} USD` : null,
             m.errorCount > 0 ? `virheitä ${m.errorCount}/${m.caseCount}` : null,
           ].filter(Boolean);

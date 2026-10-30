@@ -80,6 +80,8 @@ eval:
     # mallilla tuomarina pisteet vinoutuisivat sitä itseään suosiviksi.
     model: openrouter/openai/gpt-4o-mini
     systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
+    # Tuomarikutsun max_tokens (oletus 64). Nosta, jos tuomari on päättelymalli.
+    # maxTokens: 64
   # Montako (malli, prompt) -kutsua run_eval ajaa samanaikaisesti.
   # Oletus 4. Nostaa läpimenoa isoilla prompt-sarjoilla, koska kutsut
   # odottavat pääosin verkkovastausta - liian suuri arvo voi kuitenkin

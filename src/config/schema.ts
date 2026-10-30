@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TOKENS_PER_CALL } from "../lib/limits.js";
 
 /**
  * Yhden tehtävätyypin reititys: ensisijainen malli ja valinnainen varamalli.
@@ -41,6 +42,9 @@ export const EvalJudgeConfigSchema = z.object({
   // sama malli tuomarina vinouttaisi pisteytystä sitä itseään kohti.
   model: z.string().optional(),
   systemPrompt: z.string().optional(),
+  // Tuomarikutsun max_tokens. Vastaus on yksi numero, joten oletus (64) on
+  // pieni; nosta, jos tuomarimalli käyttää päättelytokeneita.
+  maxTokens: z.number().int().min(1).max(MAX_TOKENS_PER_CALL).optional(),
 });
 
 export const ModelPricingSchema = z.object({

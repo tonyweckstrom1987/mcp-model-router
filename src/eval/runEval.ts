@@ -43,6 +43,8 @@ export interface EvalCaseResult {
   response: string;
   passed: boolean | null;
   judgeScore: number | null;
+  /** Miksi tuomaripiste puuttuu (kutsu epäonnistui tai vastaus ei ollut 1-5). null, jos piste saatiin tai tuomaria ei käytetty. */
+  judgeError: string | null;
   priceUsd: number | null;
   error: string | null;
 }
@@ -52,6 +54,8 @@ export interface EvalModelSummary {
   avgLatencyMs: number;
   passRate: number | null;
   avgJudgeScore: number | null;
+  /** Tapaukset, joissa tuomaria pyydettiin mutta pistettä ei saatu. */
+  judgeErrorCount: number;
   avgPriceUsd: number | null;
   errorCount: number;
   caseCount: number;
@@ -139,9 +143,38 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, worker:
   return results;
 }
 
-async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, responseText: string, budget: TokenBudget): Promise<number | null> {
+/** Tuomarikutsun oletus-maxTokens: vastaus on yksi numero, joten 4096 tokenin varaus olisi turha. */
+export const DEFAULT_JUDGE_MAX_TOKENS = 64;
+
+/**
+ * Poimii tuomarin vastauksesta pisteet 1-5. Hyväksyy pelkän numeron
+ * ("4", "4.5", "4,5") tai muodon "4/5". Hylkää (null) luvut, jotka eivät ole
+ * asteikolla (esim. "10/10", "2024"), sekä vastaukset, joissa on useita
+ * keskenään ristiriitaisia ehdokkaita - väärä piste on pahempi kuin puuttuva.
+ */
+export function parseJudgeScore(text: string): number | null {
+  const candidates = new Set<number>();
+  const tokenRe = /\d+(?:[.,]\d+)?(?:\s*\/\s*\d+)?/g;
+  for (const match of text.matchAll(tokenRe)) {
+    const token = match[0];
+    const [valuePart, scalePart] = token.split("/").map((t) => t.trim());
+    if (scalePart !== undefined && scalePart !== "5") continue;
+    const value = Number(valuePart.replace(",", "."));
+    if (!Number.isFinite(value) || value < 1 || value > 5) continue;
+    candidates.add(value);
+  }
+  if (candidates.size !== 1) return null;
+  return [...candidates][0];
+}
+
+export interface JudgeOutcome {
+  score: number | null;
+  error: string | null;
+}
+
+async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, responseText: string, budget: TokenBudget): Promise<JudgeOutcome> {
   const judgeModel = config.eval.judge.model;
-  if (!judgeModel) return null;
+  if (!judgeModel) return { score: null, error: "eval.judge.model puuttuu konfiguraatiosta" };
   const system =
     config.eval.judge.systemPrompt ??
     "Olet tiukka arvioija. Arvioi vastauksen laatu asteikolla 1-5 ja vastaa PELKÄLLÄ numerolla.";
@@ -161,15 +194,20 @@ async function judgeResponse(config: AppConfig, testCase: EvalPromptCase, respon
       model: resolveModelId(config.provider, judgeModel),
       timeoutMs: config.provider.timeoutMs,
       budget,
+      maxTokens: config.eval.judge.maxTokens ?? DEFAULT_JUDGE_MAX_TOKENS,
       messages: [
         { role: "system", content: system },
         { role: "user", content: userPrompt },
       ],
     });
-    const match = result.text.match(/[1-5](\.\d+)?/);
-    return match ? parseFloat(match[0]) : null;
-  } catch {
-    return null;
+    const score = parseJudgeScore(result.text);
+    if (score === null) {
+      return { score: null, error: `tuomarin vastauksesta ei saatu yksiselitteistä pistettä 1-5: ${JSON.stringify(result.text.slice(0, 80))}` };
+    }
+    return { score, error: null };
+  } catch (err) {
+    // Ei nielaista hiljaa: virhe (myös LimitExceededError) näkyy raportissa.
+    return { score: null, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -207,6 +245,7 @@ function summarizePerModel(models: string[], results: EvalCaseResult[]): EvalMod
       avgLatencyMs,
       passRate,
       avgJudgeScore,
+      judgeErrorCount: modelResults.filter((r) => r.judgeError !== null).length,
       avgPriceUsd,
       errorCount: modelResults.filter((r) => r.error !== null).length,
       caseCount: modelResults.length,
@@ -311,7 +350,8 @@ export async function runEval(
       const passed = testCase.expectedContains
         ? result.text.toLowerCase().includes(testCase.expectedContains.toLowerCase())
         : null;
-      const judgeScore = judgeUsed ? await judgeResponse(config, testCase, result.text, budget) : null;
+      const judge = judgeUsed ? await judgeResponse(config, testCase, result.text, budget) : { score: null, error: null };
+      const judgeScore = judge.score;
       const priceUsd = estimatePriceUsd(config, model, result.usage);
 
       const row: EvalCaseResult = {
@@ -321,6 +361,7 @@ export async function runEval(
         response: result.text,
         passed,
         judgeScore,
+        judgeError: judge.error,
         priceUsd,
         error: null,
       };
@@ -338,6 +379,7 @@ export async function runEval(
         response: "",
         passed,
         judgeScore: null,
+        judgeError: null,
         priceUsd: null,
         error: message,
       };
