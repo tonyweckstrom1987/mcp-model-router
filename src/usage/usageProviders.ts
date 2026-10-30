@@ -17,6 +17,26 @@ export interface UsageSnapshot {
   raw: unknown;
 }
 
+export const USAGE_TIMEOUT_MS = 15_000;
+
+/** fetch aikakatkaisulla: sekä yhteys että vastausrungon luku keskeytetään. */
+async function getJson(url: string, config: UsageConfig, nimi: string): Promise<unknown> {
+  const ms = config.timeoutMs ?? USAGE_TIMEOUT_MS;
+  try {
+    const res = await fetch(url, { headers: authHeaders(config.apiKey), signal: AbortSignal.timeout(ms) });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`${nimi}-kulutustietojen haku epäonnistui (${res.status} ${res.statusText}): ${body.slice(0, 300)}`);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error(`${nimi}-kulutustietojen haku aikakatkaistiin (${ms} ms)`);
+    }
+    throw err;
+  }
+}
+
 export async function fetchUsage(config: UsageConfig): Promise<UsageSnapshot> {
   if (config.provider === "openrouter") return fetchOpenRouterUsage(config);
   return fetchLiteLlmUsage(config);
@@ -24,12 +44,7 @@ export async function fetchUsage(config: UsageConfig): Promise<UsageSnapshot> {
 
 async function fetchLiteLlmUsage(config: UsageConfig): Promise<UsageSnapshot> {
   const url = joinUrl(config.baseUrl, "/user/info");
-  const res = await fetch(url, { headers: authHeaders(config.apiKey) });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`LiteLLM-kulutustietojen haku epäonnistui (${res.status} ${res.statusText}): ${body.slice(0, 300)}`);
-  }
-  const json = (await res.json()) as {
+  const json = (await getJson(url, config, "LiteLLM")) as {
     user_info?: { spend?: number; max_budget?: number | null };
     spend?: number;
     max_budget?: number | null;
@@ -50,12 +65,7 @@ async function fetchLiteLlmUsage(config: UsageConfig): Promise<UsageSnapshot> {
 
 async function fetchOpenRouterUsage(config: UsageConfig): Promise<UsageSnapshot> {
   const url = joinUrl(config.baseUrl, "/credits");
-  const res = await fetch(url, { headers: authHeaders(config.apiKey) });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`OpenRouter-kulutustietojen haku epäonnistui (${res.status} ${res.statusText}): ${body.slice(0, 300)}`);
-  }
-  const json = (await res.json()) as {
+  const json = (await getJson(url, config, "OpenRouter")) as {
     data?: { total_credits?: number; total_usage?: number };
   };
   const data = json.data ?? {};

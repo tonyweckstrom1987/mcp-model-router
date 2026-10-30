@@ -31,6 +31,8 @@ export const UsageConfigSchema = z.object({
   provider: z.enum(["litellm", "openrouter"]).default("litellm"),
   baseUrl: z.string().url("usage.baseUrl täytyy olla kelvollinen URL"),
   apiKey: z.string().optional().default(""),
+  // Kulutusrajapinnan aikakatkaisu (ms). Ilman sitä roikkuva rajapinta piti get_usage-kutsun auki rajattomasti.
+  timeoutMs: z.number().int().positive().max(120_000).optional(),
 });
 export type UsageConfig = z.infer<typeof UsageConfigSchema>;
 

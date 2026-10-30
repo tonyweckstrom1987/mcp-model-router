@@ -53,4 +53,20 @@ describe("fetchUsage", () => {
       fetchUsage({ provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "" }),
     ).rejects.toThrow(/401/);
   });
+  it("aikakatkaisee roikkuvan kulutusrajapinnan (katselmointi 28.10., löydös 5)", async () => {
+    const pool = mockAgent.get("http://litellm.local:4000");
+    pool.intercept({ path: "/user/info", method: "GET" }).reply(200, { user_info: { spend: 1 } }).delay(2_000);
+
+    const alku = Date.now();
+    await expect(
+      fetchUsage({ provider: "litellm", baseUrl: "http://litellm.local:4000", apiKey: "", timeoutMs: 100 }),
+    ).rejects.toThrow(/aikakatkaistiin \(100 ms\)/);
+    expect(Date.now() - alku).toBeLessThan(1_500);
+  });
+
+  it("HTTP-virhe näkyy edelleen tilakoodina", async () => {
+    const pool = mockAgent.get("https://openrouter.ai");
+    pool.intercept({ path: "/credits", method: "GET" }).reply(503, "huolto");
+    await expect(fetchUsage({ provider: "openrouter", baseUrl: "https://openrouter.ai", apiKey: "" })).rejects.toThrow(/503/);
+  });
 });
