@@ -195,7 +195,7 @@ describe("kustannuskatot", () => {
         provider: { baseUrl: BASE, apiKey: "", timeoutMs: 5000, kind: "litellm" },
         tasks: { general: { model: "primary", fallbackModel: "fallback" } },
         usage: { provider: "litellm", baseUrl: BASE, apiKey: "" },
-        eval: { judge: { enabled: false }, pricing: {}, concurrency: 4 },
+        eval: { judge: { enabled: false }, pricing: {}, concurrency: 4, allowedModels: ["a", "b", "c"] },
         database: { path: ":memory:" },
       };
     }

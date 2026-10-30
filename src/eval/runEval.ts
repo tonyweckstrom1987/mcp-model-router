@@ -299,12 +299,31 @@ function summarizePerTaskType(models: string[], cases: EvalPromptCase[], results
  * vastauksen rinnakkain. Laatu arvioidaan yksinkertaisella
  * sisältää-tarkistuksella ja valinnaisella LLM-tuomarilla.
  */
+/** run_evalissa sallitut mallit: tasks-osion model/fallbackModel + eval.allowedModels. */
+export function allowedEvalModels(config: AppConfig): Set<string> {
+  const sallitut = new Set<string>(config.eval.allowedModels ?? []);
+  for (const route of Object.values(config.tasks)) {
+    sallitut.add(route.model);
+    if (route.fallbackModel) sallitut.add(route.fallbackModel);
+  }
+  return sallitut;
+}
+
 export async function runEval(
   config: AppConfig,
   input: RunEvalInput,
   db?: Db,
   options: { evalDir?: string } = { evalDir: getEvalDirFromEnv() },
 ): Promise<EvalReport> {
+  // Mallit tarkistetaan ensimmäisenä: ei tiedostojen lukua, ei kirjauksia, ei kutsuja.
+  const sallitut = allowedEvalModels(config);
+  const kielletyt = input.models.filter((m) => !sallitut.has(m));
+  if (kielletyt.length > 0) {
+    throw new LimitExceededError(
+      `run_eval: mallit eivät ole sallittuja: ${kielletyt.join(", ")}. Sallitut: tasks-osion mallit ja eval.allowedModels (config.yaml). Ajoa ei aloitettu`,
+    );
+  }
+
   // Polku tarkistetaan ennen kuin mitään luetaan tai kutsutaan.
   const resolvedPath = resolveEvalPromptPath(input.promptSetPath, options.evalDir);
   const cases = loadPromptSet(resolvedPath);

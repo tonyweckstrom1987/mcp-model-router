@@ -177,6 +177,7 @@ usage:
   provider: litellm   # litellm | openrouter
   baseUrl: ${USAGE_BASE_URL:-http://localhost:4000}
   apiKey: ${USAGE_API_KEY:-}
+  # timeoutMs: 15000  # kulutusrajapinnan aikakatkaisu (oletus 15 s)
 
 eval:
   judge:
@@ -270,6 +271,10 @@ tai avaimen näköinen merkkijono.
 tavalla kuin muutkin työkalut (`tools/call`, ks. [Nopea
 kokeilu](#nopea-kokeilu)). Esimerkki HTTP-tilassa, kahdella mallilla ja
 `eval-prompts.fi.json`-sarjalla:
+
+Mallit rajataan: `run_eval` hyväksyy vain `config.yaml`:n `tasks`-osion mallit (`model`,
+`fallbackModel`) ja listan `eval.allowedModels`. Muu malli hylätään ennen yhtään kutsua, jotta
+tokenin haltija ei voi ohjata kutsuja proxyn kalleimpaan malliin.
 
 ```bash
 # palvelin käynnistetty ympäristömuuttujalla EVAL_DIR=/polku/mcp-model-router/examples
