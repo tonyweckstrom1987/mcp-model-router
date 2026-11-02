@@ -4,6 +4,8 @@ import type { AppConfig } from "../config/schema.js";
 import type { Db } from "../lib/db.js";
 import { routeAndComplete } from "../router/routeAndComplete.js";
 import { fetchUsage } from "../usage/usageProviders.js";
+import { fetchAvailableModels } from "../models/availableModels.js";
+import { resolveModelId } from "../lib/modelId.js";
 import { runEval } from "../eval/runEval.js";
 
 function errorMessage(err: unknown): string {
@@ -71,12 +73,15 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
     "list_models",
     {
       title: "Listaa mallit",
-      description: "Listaa config.yaml:ssa määritellyt tehtävätyypit ja niihin liitetyt pää- ja varamallit.",
+      description:
+        "Listaa config.yaml:n tehtävätyypit pää- ja varamalleineen sekä palvelimen /models-rajapinnasta haetut " +
+        "oikeasti saatavilla olevat mallit (välimuisti). Jos haku epäonnistuu, näytetään vain config.yaml ja virhe.",
       inputSchema: {
         taskType: z.string().optional().describe("Valinnainen suodatin: näytä vain tämän tehtävätyypin reititys"),
+        refresh: z.boolean().optional().describe("Ohita välimuisti ja hae mallilista uudelleen (oletus false)"),
       },
     },
-    async ({ taskType }) => {
+    async ({ taskType, refresh }) => {
       const entries = Object.entries(config.tasks).filter(([key]) => !taskType || key === taskType);
       if (entries.length === 0) {
         return {
@@ -84,13 +89,42 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
           content: [{ type: "text" as const, text: `Tehtävätyyppiä '${taskType}' ei löydy config.yaml:sta.` }],
         };
       }
-      const lines = entries.map(
-        ([task, route]) => `- ${task}: ${route.model}${route.fallbackModel ? ` (varamalli: ${route.fallbackModel})` : ""}`,
-      );
+
+      let available: Awaited<ReturnType<typeof fetchAvailableModels>> | undefined;
+      let fetchError: string | undefined;
+      try {
+        available = await fetchAvailableModels(config.provider, { refresh });
+      } catch (err) {
+        fetchError = errorMessage(err);
+      }
+      const ids = available ? new Set(available.ids) : undefined;
+      const missing = (model: string): boolean => (ids ? !ids.has(resolveModelId(config.provider, model)) : false);
+
+      const lines = entries.map(([task, route]) => {
+        const notes = [
+          missing(route.model) ? `päämalli ei ole palvelimen listalla` : "",
+          route.fallbackModel && missing(route.fallbackModel) ? `varamalli ei ole palvelimen listalla` : "",
+        ].filter(Boolean);
+        return (
+          `- ${task}: ${route.model}${route.fallbackModel ? ` (varamalli: ${route.fallbackModel})` : ""}` +
+          (notes.length ? ` [VAROITUS: ${notes.join(", ")}]` : "")
+        );
+      });
+      const text = [`Tehtävätyypeittäin määritellyt mallit (config.yaml):\n${lines.join("\n")}`];
+      if (available) {
+        text.push(
+          `\nSaatavilla olevat mallit (${config.provider.kind} /models, ${available.ids.length} kpl${available.cached ? ", välimuistista" : ""}):\n` +
+            (available.ids.length ? available.ids.map((id) => `- ${id}`).join("\n") : "(lista on tyhjä)"),
+        );
+      } else {
+        text.push(`\nVAROITUS: ${fetchError}. Näytetään vain config.yaml:n mallit; ne voivat olla muuta kuin palvelimella oikeasti saatavilla.`);
+      }
       return {
-        content: [{ type: "text" as const, text: `Tehtävätyypeittäin määritellyt mallit:\n${lines.join("\n")}` }],
+        content: [{ type: "text" as const, text: text.join("\n") }],
         structuredContent: {
           tasks: Object.fromEntries(entries.map(([task, route]) => [task, route])),
+          available: available ? { models: available.ids, cached: available.cached } : null,
+          availableError: fetchError ?? null,
         },
       };
     },

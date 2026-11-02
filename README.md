@@ -56,7 +56,7 @@ ks. [Asennus](#asennus) ja [Ajaminen](#ajaminen).
 
 ## Kokeile ilman LLM-avainta
 
-`list_models` lukee vain `config.yaml`:n, joten sen voi kokeilla ilman LiteLLM:ää tai API-avainta. Stdio-tilassa palvelin lukee JSON-RPC-viestit stdinistä (`sleep 2` pitää putken auki, kunnes vastaus on tullut):
+`list_models` toimii ilman LiteLLM:ää tai API-avainta: kun `/models`-haku epäonnistuu, se näyttää `config.yaml`:n mallit ja virheilmoituksen. Stdio-tilassa palvelin lukee JSON-RPC-viestit stdinistä (`sleep 2` pitää putken auki, kunnes vastaus on tullut):
 
 Komento käyttää `dist/index.js`:ää, joten aja ensin `npm install && npm run build` (ks. [Asennus](#asennus)).
 
@@ -234,7 +234,7 @@ tasks:
 | Työkalu              | Kuvaus                                                                 |
 |-----------------------|-------------------------------------------------------------------------|
 | `route_and_complete`  | Valitsee mallin `taskType`-parametrin mukaan ja täydentää promptin. Käyttää varamallia tarvittaessa. |
-| `list_models`         | Listaa `config.yaml`:n tehtävätyypit ja niihin liitetyt mallit.        |
+| `list_models`         | Listaa `config.yaml`:n tehtävätyypit ja palvelimen `/models`-rajapinnan mallit (julkaisematon; ks. alla). |
 | `get_usage`           | Palauttaa kulutuksen ja budjetin tilan LiteLLM:stä/OpenRouterista.     |
 | `run_eval`             | Ajaa JSON-prompt-sarjan usealla mallilla ja raportoi hinnan/viiveen/laadun. |
 
@@ -636,8 +636,10 @@ CONFIG_PATH=$PWD/config.example.yaml npx @tonyweckstrom/mcp-doctor --env CONFIG_
   kulutusta (`get_usage` näyttää sen).
 - Syötteen tokenimäärä on arvio (merkkimäärä / 3); varaus korjataan
   toteutuneeseen `usage`-arvoon vasta kutsun jälkeen.
-- Ei automaattista mallilistan hakua LiteLLM:n `/models`-rajapinnasta -
-  `list_models` lukee vain `config.yaml`:n.
+- `list_models` hakee saatavilla olevat mallit palvelimen `/models`-rajapinnasta
+  (julkaisematon, ks. [CHANGELOG](CHANGELOG.md)). Jos haku epäonnistuu, työkalu
+  näyttää vain `config.yaml`:n mallit ja kertoo virheen (tyyppi ja HTTP-tila);
+  näytetyt mallit voivat silloin poiketa palvelimen todellisesta listasta.
 - Eval-hinta-arvio perustuu `config.yaml`:n `eval.pricing`-hinnastoon, ei
   automaattiseen hintojen hakuun OpenRouterista.
 - `get_usage` vaatii, että LiteLLM on käynnistetty tietokannan (Postgres)

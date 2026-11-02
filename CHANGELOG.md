@@ -5,6 +5,9 @@ Kaikki merkittävät muutokset kirjataan tähän tiedostoon. Muoto noudattaa
 
 ## [Unreleased]
 
+### Lisätty
+- `list_models` hakee oikeasti saatavilla olevat mallit palvelimen `/models`-rajapinnasta (LiteLLM tai OpenRouter) eikä lue enää pelkkää `config.yaml`:a. Tulos on välimuistissa (`provider.modelsCacheTtlMs`, oletus 60 s), haulla on aikakatkaisu (`provider.modelsTimeoutMs`, oletus 10 s) ja uusi valinnainen parametri `refresh` ohittaa välimuistin. Jos `config.yaml`:n malli puuttuu palvelimen listalta, rivillä on varoitus. Haun epäonnistuessa näytetään `config.yaml`:n mallit ja näkyvä virhe (vain tyyppi ja HTTP-tila); virhettä ei tallenneta välimuistiin.
+
 ### Korjattu
 - HTTP-tila: Bearer-tunnistus ajetaan ennen JSON-jäsennystä. Tunnistamattoman pyynnön bodya ei enää lueta, joten virheellinen JSON tai liian suuri body antaa 401:n eikä Expressin HTML-virhesivua pinojälkineen. Tunnistetun pyynnön jäsennysvirhe palauttaa JSON-RPC-virheen `-32700 Parse error` (katselmointi 28.10., löydös 9). DNS rebinding -suoja (Host-otsakkeen tarkistus) toimii kuten ennen.
 - HTTP-tila: pyyntökohtainen `McpServer` ja transport suljetaan nyt myös, kun `connect` tai `handleRequest` heittää tai yhteys sulkeutuu kesken käsittelyn; aiemmin ne jäivät auki (löydös 8).
