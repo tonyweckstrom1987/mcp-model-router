@@ -602,8 +602,8 @@ Päiväbudjetti toimii varausperiaatteella: ennen jokaista kutsua varataan
 syötteen arvio + `max_tokens` SQLiten `token_budget`-taulusta
 `BEGIN IMMEDIATE` -transaktiossa (tarkistus ja varaus ovat jakamaton
 kokonaisuus, joten rinnakkaiset kutsut eivät ohita rajaa). Kutsun jälkeen
-varaus korjataan vastauksen `usage`-arvoon. Jos `usage` puuttuu, varaus jää
-voimaan. Epäonnistunut ja tyhjä vastaus kuluttavat budjettia. Budjetin ylitys
+varaus korjataan vastauksen `usage`-arvoon. Jos `usage` puuttuu tai siitä ei
+voi päätellä käyttöä (tyhjä, nollat, pelkkä toinen osa), varaus jää voimaan. Epäonnistunut ja tyhjä vastaus kuluttavat budjettia. Budjetin ylitys
 ei käynnistä varamallia. Rajan muuttaminen vaatii koodimuutoksen.
 
 **Tyhjät vastaukset.** Tyhjä, vain välilyöntejä sisältävä tai puuttuva
