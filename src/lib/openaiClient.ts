@@ -45,6 +45,22 @@ export function authHeaders(apiKey?: string): Record<string, string> {
   return apiKey ? { authorization: `Bearer ${apiKey}` } : {};
 }
 
+/**
+ * Toteutuneet tokenit varauksen korjausta varten. Palauttaa undefined, jos käyttöä ei voi luotettavasti
+ * päätellä: oikeassa kutsussa on aina syötetokeneita, joten tyhjä usage, nollat tai pelkkä toinen
+ * osa eivät kerro kulutusta, ja niiden hyväksyminen vapauttaisi varauksen ohi päiväbudjetin.
+ */
+export function usageToSettle(usage: ChatUsage | undefined): number | undefined {
+  if (!usage) return undefined;
+  const valid = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
+  if (valid(usage.totalTokens) && usage.totalTokens > 0) return usage.totalTokens;
+  if (valid(usage.promptTokens) && valid(usage.completionTokens)) {
+    const sum = usage.promptTokens + usage.completionTokens;
+    if (sum > 0) return sum;
+  }
+  return undefined;
+}
+
 export async function callChatCompletion(opts: CallChatCompletionOptions): Promise<ChatCompletionResult> {
   // 1) Kattotarkistus ennen mitään muuta: liian suurta max_tokensia ei pienennetä hiljaa, vaan kutsu hylätään.
   if (opts.maxTokens !== undefined) {
@@ -98,8 +114,8 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
         }
       : undefined;
 
-    // 3) Korjaa varaus toteutuneeseen käyttöön; ilman usagea varaus jää voimaan.
-    reservation.settle(usage ? (usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0)) : undefined);
+    // 3) Korjaa varaus toteutuneeseen käyttöön; ilman luotettavaa usagea varaus jää voimaan.
+    reservation.settle(usageToSettle(usage));
 
     // Tyhjä, pelkkää whitespacea oleva tai puuttuva (myös katkaistu tyhjäksi) vastaus ei ole onnistuminen.
     if (text.trim() === "") {
