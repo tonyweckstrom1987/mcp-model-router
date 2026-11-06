@@ -6,6 +6,7 @@ Kaikki merkittävät muutokset kirjataan tähän tiedostoon. Muoto noudattaa
 ## [Unreleased]
 
 ### Lisätty
+- README on käännetty kokonaan englanniksi (sisällysluettelon ankkurit päivitetty). Korjattu kaksi koodin vastaista väitettä: Bearer-tunnistus ajetaan ennen JSON-jäsennystä (README väitti päinvastaista), ja mitatun vertailun tulkinta vastaa nyt taulukkoa (`qwen3-coder` oli yleinen-tehtävätyypissä hitaampi ja kalliimpi).
 - README: englanninkielinen osio "Quick start from npm" (asennus, `config.example.yaml`:n kopiointi paketista ja käynnistys `CONFIG_PATH`:lla).
 
 ### Muutettu

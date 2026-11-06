@@ -1,34 +1,32 @@
 # mcp-model-router
 
-[![CI](https://github.com/tonyweckstrom1987/mcp-model-router/actions/workflows/ci.yml/badge.svg)](https://github.com/tonyweckstrom1987/mcp-model-router/actions/workflows/ci.yml) ![Lisenssi: MIT](https://img.shields.io/badge/lisenssi-MIT-blue.svg)
+[![CI](https://github.com/tonyweckstrom1987/mcp-model-router/actions/workflows/ci.yml/badge.svg)](https://github.com/tonyweckstrom1987/mcp-model-router/actions/workflows/ci.yml) ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 
-> **English summary:** An MCP server that *complements* LiteLLM instead of replacing it. It (1) picks a model by task type from `config.yaml`, (2) reads usage and budget from LiteLLM or OpenRouter, and (3) runs the same prompt set across several models and compares cost, latency and quality. Works over stdio or streamable HTTP; SQLite stores only call logs and eval results. Details below in Finnish.
+> **Summary:** An MCP server that *complements* LiteLLM instead of replacing it. It (1) picks a model by task type from `config.yaml`, (2) reads usage and budget from LiteLLM or OpenRouter, and (3) runs the same prompt set across several models and compares cost, latency and quality. Works over stdio or streamable HTTP; SQLite stores only call logs and eval results.
 
-**Teknologiat:** TypeScript, Node.js 22/24, Model Context Protocol (stdio ja streamable HTTP), SQLite, vitest. Lisenssi: [LICENSE](./LICENSE).
+**Technologies:** TypeScript, Node.js 22/24, Model Context Protocol (stdio and streamable HTTP), SQLite, vitest. License: [LICENSE](./LICENSE).
 
-**Sisältö:** [Nopea kokeilu](#nopea-kokeilu) · [Kokeile ilman avainta](#kokeile-ilman-llm-avainta) · [Arkkitehtuuri](#arkkitehtuuri) · [Asennus](#asennus) · [MCP-työkalut](#mcp-työkalut) · [Mitattu vertailu](#esimerkki-mitattu-vertailu) · [Claude Desktop / Cursor](#claude-desktop--cursor--asetus) · [Proxmox-LXC](#ajaminen-proxmox-lxcssä) · [Tietoturva](#tietoturva) · [Tunnetut rajoitukset](#tunnetut-rajoitukset)
+**Contents:** [Quick start from npm](#quick-start-from-npm) · [Quick start from source](#quick-start-from-source) · [Try it without a key](#try-it-without-an-llm-key) · [Architecture](#architecture) · [Installation](#installation) · [MCP tools](#mcp-tools) · [Measured comparison](#example-measured-comparison) · [Claude Desktop / Cursor](#claude-desktop--cursor-configuration) · [Proxmox LXC](#running-in-a-proxmox-lxc) · [Security](#security) · [Known limitations](#known-limitations)
 
-MCP-palvelin, joka **täydentää LiteLLM:ää eikä korvaa sitä**. LiteLLM/OpenRouter
-hoitavat jo agenttikohtaiset avaimet ja kulukatot - tämä palvelin ei rakenna
-niitä uudelleen. Se tekee kolme asiaa:
+An MCP server that **complements LiteLLM and does not replace it**. LiteLLM and
+OpenRouter already handle per-agent keys and spending caps; this server does not
+rebuild them. It does three things:
 
-1. **Mallin valinta tehtävätyypin mukaan** - lukee `config.yaml`:sta
-   tehtävätyyppikohtaiset mallit (esim. `general`, `code`, `writing`,
-   `orchestration`) ja kutsuu niitä OpenAI-yhteensopivan `/chat/completions`
-   -rajapinnan kautta. Base URL ja avain tulevat ympäristömuuttujista, ja
-   rajapinta voi olla joko LiteLLM-proxy tai suoraan OpenRouter. Ei suoria
-   Anthropic-kutsuja. Jos päämalli epäonnistuu, käytetään konfiguroitua
-   varamallia.
-2. **Kulutus ja budjetti** - lukee ne suoraan LiteLLM:n (`/user/info`) tai
-   OpenRouterin (`/credits`) rajapinnasta. Ei omaa kulutuskirjanpitoa.
-3. **Eval-vertailu** - ajaa saman prompt-sarjan (JSON-tiedosto) usealla
-   mallilla ja raportoi hinnan, viiveen ja vastauksen rinnakkain, jotta
-   halvempi malli voidaan valita mitattuun laatuun perustuen. Laatu
-   arvioidaan yksinkertaisella sisältää/vastaa-tarkistuksella ja
-   valinnaisella LLM-tuomarilla.
+1. **Model selection by task type** - reads the per-task-type models from
+   `config.yaml` (e.g. `general`, `code`, `writing`, `orchestration`) and calls
+   them through an OpenAI-compatible `/chat/completions` API. The base URL and
+   key come from environment variables, and the API can be either a LiteLLM
+   proxy or OpenRouter directly. There are no direct Anthropic calls. If the
+   primary model fails, the configured fallback model is used.
+2. **Usage and budget** - reads them straight from the LiteLLM (`/user/info`) or
+   OpenRouter (`/credits`) API. There is no separate usage bookkeeping.
+3. **Eval comparison** - runs the same prompt set (a JSON file) across several
+   models and reports cost, latency and response side by side, so that a
+   cheaper model can be chosen based on measured quality. Quality is judged by
+   a simple contains/matches check and an optional LLM judge.
 
-SQLite-tietokantaa käytetään **vain** kutsulokille ja eval-tuloksille - ei
-kulutuksen tai budjetin kirjanpitoon.
+SQLite is used **only** for call logs and eval results - not for usage or
+budget bookkeeping.
 
 ## Quick start from npm
 
@@ -41,7 +39,7 @@ cp node_modules/mcp-model-router/config.example.yaml config.yaml   # edit as nee
 CONFIG_PATH=./config.yaml npx mcp-model-router
 ```
 
-The server speaks MCP over stdio by default, so it waits for a client on stdin. Without a config file it exits with code 1 and a one-line message that names the path it looked for. Set `MCP_TRANSPORT=http` for streamable HTTP (see below, in Finnish). Calling a model needs `LLM_API_KEY`; `list_models` does not.
+The server speaks MCP over stdio by default, so it waits for a client on stdin. Without a config file it exits with code 1 and a one-line message that names the path it looked for. Set `MCP_TRANSPORT=http` for streamable HTTP (see [Quick start from source](#quick-start-from-source) and [Running](#running)). Calling a model needs `LLM_API_KEY`; `list_models` does not.
 
 Check the server with [mcp-doctor](https://www.npmjs.com/package/@tonyweckstrom/mcp-doctor), no LLM key needed:
 
@@ -49,18 +47,18 @@ Check the server with [mcp-doctor](https://www.npmjs.com/package/@tonyweckstrom/
 CONFIG_PATH=./config.yaml npx @tonyweckstrom/mcp-doctor --env CONFIG_PATH --strict -- node node_modules/mcp-model-router/dist/index.js
 ```
 
-## Nopea kokeilu
+## Quick start from source
 
-Ensimmäinen `route_and_complete`-kutsu HTTP-tilassa
-(oleta, että LiteLLM pyörii jo osoitteessa `http://localhost:4000` ja siinä
-on ainakin `general`-tehtävän malli konfiguroitu):
+A first `route_and_complete` call in HTTP mode (assuming LiteLLM is already
+running at `http://localhost:4000` and has at least a model configured for the
+`general` task):
 
 ```bash
 npm install && npm run build
-cp config.example.yaml config.yaml   # muokkaa tarpeen mukaan
+cp config.example.yaml config.yaml   # edit as needed
 read -s -p "LLM_API_KEY: " LLM_API_KEY; echo
-export LLM_API_KEY   # tai ympäristötiedostoon; älä kirjoita avainta komentoriville
-export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"   # pakollinen HTTP-tilassa, väh. 32 merkkiä
+export LLM_API_KEY   # or put it in an environment file; do not type the key on the command line
+export MCP_AUTH_TOKEN="$(openssl rand -hex 32)"   # required in HTTP mode, at least 32 characters
 LLM_BASE_URL=http://localhost:4000 MCP_TRANSPORT=http MCP_HTTP_PORT=3100 npm start &
 curl -s -X POST http://127.0.0.1:3100/mcp \
   -H "Authorization: Bearer $MCP_AUTH_TOKEN" \
@@ -68,16 +66,16 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"route_and_complete","arguments":{"taskType":"general","prompt":"Sano hei suomeksi"}}}'
 ```
 
-Viimeinen komento (`curl`) tekee `tools/call`-pyynnön palvelimen `/mcp`-päätepisteeseen ja
-tulostaa vastauksen (streamable HTTP -tapahtumavirtana). Tarkemmat
-ympäristömuuttujat, `stdio`-siirtotapa ja `GET /healthz` -terveystarkastus:
-ks. [Asennus](#asennus) ja [Ajaminen](#ajaminen).
+The last command (`curl`) sends a `tools/call` request to the server's `/mcp`
+endpoint and prints the response (as a streamable HTTP event stream). For more
+on environment variables, the `stdio` transport and the `GET /healthz` health
+check, see [Installation](#installation) and [Running](#running).
 
-## Kokeile ilman LLM-avainta
+## Try it without an LLM key
 
-`list_models` lukee vain `config.yaml`:n, joten sen voi kokeilla ilman LiteLLM:ää tai API-avainta. Stdio-tilassa palvelin lukee JSON-RPC-viestit stdinistä (`sleep 2` pitää putken auki, kunnes vastaus on tullut):
+`list_models` only reads `config.yaml`, so you can try it without LiteLLM or an API key. In stdio mode the server reads JSON-RPC messages from stdin (`sleep 2` keeps the pipe open until the response has arrived):
 
-Komento käyttää `dist/index.js`:ää, joten aja ensin `npm install && npm run build` (ks. [Asennus](#asennus)).
+The command uses `dist/index.js`, so first run `npm install && npm run build` (see [Installation](#installation)).
 
 ```bash
 cp config.example.yaml config.yaml
@@ -87,7 +85,7 @@ cp config.example.yaml config.yaml
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_models","arguments":{}}}'; sleep 2) | node dist/index.js
 ```
 
-Viimeisen rivin vastauksen tekstiosa `config.example.yaml`:lla:
+The text part of the last line's response with `config.example.yaml` (the server's own messages are in Finnish):
 
 ```
 Tehtävätyypeittäin määritellyt mallit:
@@ -97,83 +95,86 @@ Tehtävätyypeittäin määritellyt mallit:
 - orchestration: openrouter/openai/gpt-4o (varamalli: openrouter/anthropic/claude-3.5-sonnet)
 ```
 
-## Arkkitehtuuri
+(In English: "Models defined per task type", with "varamalli" meaning "fallback model".)
+
+## Architecture
 
 ```
                        ┌─────────────────────────┐
- AgentScope-agentti ──▶│   mcp-model-router (MCP) │
- (tai muu MCP-klientti) │                          │
+ AgentScope agent ────▶│   mcp-model-router (MCP) │
+ (or other MCP client) │                          │
                        │  route_and_complete       │
                        │  list_models              │
-                       │  get_usage                │──▶ LiteLLM-proxy / OpenRouter
-                       │  run_eval                 │      (OpenAI-yhteensopiva API)
+                       │  get_usage                │──▶ LiteLLM proxy / OpenRouter
+                       │  run_eval                 │      (OpenAI-compatible API)
                        └───────────┬──────────────┘
                                    │
                                    ▼
                          SQLite (call_log, eval_run, eval_result, token_budget)
 ```
 
-- **Siirtotavat**: stdio (paikalliseen käyttöön, esim. Claude Desktop/Cursor)
-  ja streamable HTTP (jotta muut kontit tavoittavat palvelimen Tailscale-
-  verkossa). HTTP-tila on tilaton (`sessionIdGenerator: undefined`) - jokainen
-  pyyntö saa oman transport-instanssinsa, joten useat agentit voivat kutsua
-  palvelinta yhtäaikaisesti. `/mcp` vaatii Bearer-tokenin (`MCP_AUTH_TOKEN`),
-  ja verkkotason rajaus (Tailscale ACL:t) on sen lisäksi - ks.
-  [Tietoturva](#tietoturva).
-- **Konfiguraatio**: `config.yaml` (ympäristömuuttujaviittauksin, ei
-  salaisuuksia tiedostossa) + varsinaiset arvot ympäristömuuttujista.
-- **Kustannuskatot ovat kovakoodattuja** (`src/lib/limits.ts`): `maxTokens`
-  on valinnainen parametri, mutta sen yläraja on 4096 ja päiväkohtainen
-  tokenibudjetti rajaa kokonaiskulutuksen - ks. [Tietoturva](#tietoturva).
+- **Transports**: stdio (for local use, e.g. Claude Desktop/Cursor) and
+  streamable HTTP (so that other containers can reach the server over the
+  Tailscale network). HTTP mode is stateless (`sessionIdGenerator: undefined`):
+  every request gets its own transport instance, so several agents can call the
+  server at the same time. `/mcp` requires a Bearer token (`MCP_AUTH_TOKEN`),
+  and network-level restriction (Tailscale ACLs) comes on top of that - see
+  [Security](#security).
+- **Configuration**: `config.yaml` (with environment variable references, no
+  secrets in the file) + the actual values from environment variables.
+- **Cost caps are hard-coded** (`src/lib/limits.ts`): `maxTokens` is an
+  optional parameter, but its upper limit is 4096 and a daily token budget
+  caps total consumption - see [Security](#security).
 
-## Asennus
+## Installation
 
-Vaatii Node.js 22.12 tai uudemman (22 tai 24).
+Requires Node.js 22.12 or newer (22 or 24).
 
 ```bash
 npm install
-cp config.example.yaml config.yaml   # muokkaa tarpeen mukaan
+cp config.example.yaml config.yaml   # edit as needed
 npm run build
 ```
 
-Ympäristömuuttujat (esimerkkiarvot, ei salaisuuksia repossa):
+Environment variables (example values, no secrets in the repository):
 
-| Muuttuja           | Kuvaus                                                        | Oletus                    |
+| Variable            | Description                                                    | Default                   |
 |---------------------|----------------------------------------------------------------|----------------------------|
-| `LLM_BASE_URL`      | OpenAI-yhteensopivan rajapinnan base URL                       | `http://localhost:4000`   |
-| `LLM_API_KEY`       | Avain edelliseen rajapintaan                                   | (tyhjä)                   |
-| `LLM_PROVIDER_KIND` | `litellm` tai `openrouter` - katso [Mallitunnisteet: LiteLLM vs. suora OpenRouter](#mallitunnisteet-litellm-vs-suora-openrouter) | `litellm` |
-| `USAGE_BASE_URL`    | Kulutusrajapinnan base URL (yleensä sama kuin `LLM_BASE_URL`)   | `http://localhost:4000`   |
-| `USAGE_API_KEY`     | Avain kulutusrajapintaan                                       | (tyhjä)                   |
-| `CONFIG_PATH`       | Polku `config.yaml`-tiedostoon                                 | `config.yaml`              |
-| `DB_PATH`           | SQLite-tiedoston polku                                         | `./data/mcp-model-router.sqlite` |
-| `MCP_TRANSPORT`     | `stdio` tai `http`                                              | `stdio`                    |
-| `MCP_HTTP_HOST`     | HTTP-siirtotavan bind-osoite                                    | `127.0.0.1`                |
-| `MCP_HTTP_PORT`     | HTTP-siirtotavan portti (oletus vaihdettu 3100:aan, koska 3000 on usein varattu esim. Open WebUI:lle) | `3100`                     |
-| `MCP_AUTH_TOKEN`    | **Pakollinen HTTP-tilassa**: Bearer-token `/mcp`-päätepisteelle, vähintään 32 merkkiä. Ilman sitä palvelin ei käynnisty | (ei asetettu) |
-| `EVAL_DIR`          | Ainoa hakemisto, josta `run_eval` lukee prompt-tiedostoja (vain `.json`). Ilman tätä `run_eval` kieltäytyy | (ei asetettu) |
-| `MCP_ALLOWED_HOSTS` | Pilkulla eroteltu lista sallittuja Host-otsikoita (DNS-rebinding-suojaus) | (ei asetettu)      |
+| `LLM_BASE_URL`      | Base URL of the OpenAI-compatible API                          | `http://localhost:4000`   |
+| `LLM_API_KEY`       | Key for the API above                                          | (empty)                   |
+| `LLM_PROVIDER_KIND` | `litellm` or `openrouter` - see [Model identifiers: LiteLLM vs. direct OpenRouter](#model-identifiers-litellm-vs-direct-openrouter) | `litellm` |
+| `USAGE_BASE_URL`    | Base URL of the usage API (usually the same as `LLM_BASE_URL`)  | `http://localhost:4000`   |
+| `USAGE_API_KEY`     | Key for the usage API                                          | (empty)                   |
+| `CONFIG_PATH`       | Path to the `config.yaml` file                                 | `config.yaml`              |
+| `DB_PATH`           | Path to the SQLite file                                        | `./data/mcp-model-router.sqlite` |
+| `MCP_TRANSPORT`     | `stdio` or `http`                                              | `stdio`                    |
+| `MCP_HTTP_HOST`     | Bind address of the HTTP transport                              | `127.0.0.1`                |
+| `MCP_HTTP_PORT`     | Port of the HTTP transport (default changed to 3100 because 3000 is often taken, e.g. by Open WebUI) | `3100`                     |
+| `MCP_AUTH_TOKEN`    | **Required in HTTP mode**: Bearer token for the `/mcp` endpoint, at least 32 characters. The server does not start without it | (not set) |
+| `EVAL_DIR`          | The only directory `run_eval` reads prompt files from (`.json` only). Without it `run_eval` refuses | (not set) |
+| `MCP_ALLOWED_HOSTS` | Comma-separated list of allowed Host headers (DNS rebinding protection) | (not set)      |
 
-### Ajaminen
+### Running
 
 ```bash
-# stdio (esim. Claude Desktop / Cursor)
+# stdio (e.g. Claude Desktop / Cursor)
 npm start
 
-# streamable HTTP (oletus: vain tämä kone; muille Tailscale-kontteille aseta MCP_HTTP_HOST oman Tailscale-osoitteen mukaan, ei 0.0.0.0)
-# MCP_AUTH_TOKEN on pakollinen (väh. 32 merkkiä), esim. openssl rand -hex 32
+# streamable HTTP (default: this machine only; for other Tailscale containers set MCP_HTTP_HOST to your own Tailscale address, not 0.0.0.0)
+# MCP_AUTH_TOKEN is required (at least 32 characters), e.g. openssl rand -hex 32
 MCP_TRANSPORT=http MCP_HTTP_HOST=127.0.0.1 MCP_HTTP_PORT=3100 MCP_AUTH_TOKEN=... npm start
 ```
 
-HTTP-tilassa palvelin vastaa osoitteessa `http://<host>:<port>/mcp` ja
-tarjoaa lisäksi `GET /healthz` -terveystarkastuksen. Stdio-tilassa vastaava
-`tools/call`-pyyntö syötetään palvelimelle stdinistä yksittäisenä
-JSON-RPC-viestinä (ks. [Nopea kokeilu](#nopea-kokeilu) HTTP-versiosta).
+In HTTP mode the server answers at `http://<host>:<port>/mcp` and also
+provides a `GET /healthz` health check. In stdio mode the corresponding
+`tools/call` request is fed to the server from stdin as a single JSON-RPC
+message (see [Quick start from source](#quick-start-from-source) for the HTTP
+version).
 
-## config.yaml-esimerkki
+## config.yaml example
 
-Ks. koko esimerkki tiedostossa [`config.example.yaml`](./config.example.yaml).
-Tiivistettynä:
+See the full example in [`config.example.yaml`](./config.example.yaml).
+In short:
 
 ```yaml
 provider:
@@ -190,19 +191,19 @@ tasks:
     fallbackModel: openrouter/deepseek/deepseek-v4.1-flash
   orchestration:
     model: openrouter/openai/gpt-4o
-    timeoutMs: 120000   # ohittaa provider.timeoutMs:n tälle tehtävätyypille
+    timeoutMs: 120000   # overrides provider.timeoutMs for this task type
 
 usage:
   provider: litellm   # litellm | openrouter
   baseUrl: ${USAGE_BASE_URL:-http://localhost:4000}
   apiKey: ${USAGE_API_KEY:-}
-  # timeoutMs: 15000  # kulutusrajapinnan aikakatkaisu (oletus 15 s)
+  # timeoutMs: 15000  # timeout of the usage API (default 15 s)
 
 eval:
   judge:
     enabled: false
-    model: openrouter/openai/gpt-4o-mini   # eri malli kuin arvioitavat mallit, ks. alla
-  concurrency: 4   # montako (malli, prompt) -kutsua ajetaan samanaikaisesti
+    model: openrouter/openai/gpt-4o-mini   # a different model than the models under evaluation, see below
+  concurrency: 4   # how many (model, prompt) calls run at the same time
   pricing:
     openrouter/deepseek/deepseek-v4.1-flash:
       inputPerMillionUsd: 0.2
@@ -212,52 +213,52 @@ database:
   path: ${DB_PATH:-./data/mcp-model-router.sqlite}
 ```
 
-### Mallitunnisteet: LiteLLM vs. suora OpenRouter
+### Model identifiers: LiteLLM vs. direct OpenRouter
 
-`tasks`-lohkon mallitunnisteet kirjoitetaan aina LiteLLM:n käyttämässä
-muodossa, esim. `openrouter/deepseek/deepseek-v4.1-flash`. `openrouter/`-
-etuliite on LiteLLM:n oma tapa kertoa, että pyyntö reititetään OpenRouterin
-kautta - se ei ole osa OpenRouterin omaa mallitunnistetta.
+Model identifiers in the `tasks` block are always written in the form LiteLLM
+uses, e.g. `openrouter/deepseek/deepseek-v4.1-flash`. The `openrouter/`
+prefix is LiteLLM's own way of saying that the request is routed through
+OpenRouter - it is not part of OpenRouter's own model identifier.
 
-- **`provider.kind: litellm`** (oletus, `LLM_BASE_URL` osoittaa LiteLLM-
-  proxyyn): tunniste lähetetään sellaisenaan, etuliite mukaan lukien.
-- **`provider.kind: openrouter`** (`LLM_BASE_URL` osoittaa suoraan
-  `https://openrouter.ai/api/v1`): reititin karsii `openrouter/`-etuliitteen
-  automaattisesti ennen rajapintakutsua (ks. `src/lib/modelId.ts`), joten
-  sama `config.yaml` toimii sellaisenaan molemmilla - vain
-  `LLM_BASE_URL`/`LLM_PROVIDER_KIND` vaihtuvat.
+- **`provider.kind: litellm`** (default, `LLM_BASE_URL` points to a LiteLLM
+  proxy): the identifier is sent as it is, prefix included.
+- **`provider.kind: openrouter`** (`LLM_BASE_URL` points directly to
+  `https://openrouter.ai/api/v1`): the router strips the `openrouter/` prefix
+  automatically before the API call (see `src/lib/modelId.ts`), so the same
+  `config.yaml` works unchanged with both - only
+  `LLM_BASE_URL`/`LLM_PROVIDER_KIND` change.
 
-### Tehtävätyyppikohtainen aikakatkaisu (`timeoutMs`)
+### Per-task-type timeout (`timeoutMs`)
 
-`tasks.<taskType>.timeoutMs` on valinnainen ja ohittaa `provider.timeoutMs`:n
-vain kyseiselle tehtävätyypille (vaikuttaa `route_and_complete`-kutsuihin,
-sekä päämalliin että varamalliin). Oletuksena kaikki tehtävätyypit käyttävät
-`provider.timeoutMs`:ää (oletus 60000 ms).
+`tasks.<taskType>.timeoutMs` is optional and overrides `provider.timeoutMs`
+for that task type only (it affects `route_and_complete` calls, for both the
+primary model and the fallback model). By default all task types use
+`provider.timeoutMs` (default 60000 ms).
 
-Tämä on hyödyllinen erityisesti päättelymalleille (reasoning-malleilla), jotka
-voivat kestää huomattavasti kauemmin monimutkaisissa pilkkomis- tai
-orkestrointitehtävissä kuin yksinkertaisissa yleistiedon tai lyhyen koodin
-tehtävissä - ks. [Esimerkki: mitattu vertailu](#esimerkki-mitattu-vertailu),
-jossa "pilkkominen"-tehtävätyyppi aiheutti aikakatkaisuja 60 s
-oletusaikakatkaisulla:
+This is especially useful for reasoning models, which can take considerably
+longer on complex decomposition or orchestration tasks than on simple
+general-knowledge or short-code tasks - see
+[Example: measured comparison](#example-measured-comparison), where the
+"pilkkominen" (decomposition) task type caused timeouts with the 60 s default
+timeout:
 
 ```yaml
 tasks:
   orchestration:
     model: openrouter/deepseek/deepseek-v4.1-flash
-    timeoutMs: 120000   # 2 min, oletuksen sijaan 60000 ms (1 min)
+    timeoutMs: 120000   # 2 min, instead of the default 60000 ms (1 min)
 ```
 
-## MCP-työkalut
+## MCP tools
 
-| Työkalu              | Kuvaus                                                                 |
+| Tool                  | Description                                                            |
 |-----------------------|-------------------------------------------------------------------------|
-| `route_and_complete`  | Valitsee mallin `taskType`-parametrin mukaan ja täydentää promptin. Käyttää varamallia tarvittaessa. Valinnainen `maxTokens` (kokonaisluku 1-4096; suurempi arvo hylätään). |
-| `list_models`         | Listaa `config.yaml`:n tehtävätyypit ja niihin liitetyt mallit.        |
-| `get_usage`           | Palauttaa kulutuksen ja budjetin tilan LiteLLM:stä/OpenRouterista.     |
-| `run_eval`             | Ajaa JSON-prompt-sarjan usealla mallilla ja raportoi hinnan/viiveen/laadun. |
+| `route_and_complete`  | Picks a model by the `taskType` parameter and completes the prompt. Uses the fallback model when needed. Optional `maxTokens` (integer 1-4096; a larger value is rejected). |
+| `list_models`         | Lists the task types in `config.yaml` and the models attached to them. |
+| `get_usage`           | Returns the state of usage and budget from LiteLLM/OpenRouter.         |
+| `run_eval`            | Runs a JSON prompt set across several models and reports cost/latency/quality. |
 
-Eval-prompt-tiedoston muoto, ks. esimerkki
+For the format of the eval prompt file, see the example
 [`examples/eval-prompts.example.json`](./examples/eval-prompts.example.json):
 
 ```json
@@ -266,37 +267,37 @@ Eval-prompt-tiedoston muoto, ks. esimerkki
 ]
 ```
 
-Laajempi, 15-20 suomenkielisen promptin esimerkkisarja neljälle tehtävätyypille
-(yleinen tieto, koodaus, kirjoitus/tiivistys, tehtävän pilkkominen) löytyy
-tiedostosta [`examples/eval-prompts.fi.json`](./examples/eval-prompts.fi.json).
+A larger example set of 15-20 Finnish-language prompts for four task types
+(general knowledge, coding, writing/summarising, task decomposition) is in
+[`examples/eval-prompts.fi.json`](./examples/eval-prompts.fi.json).
 
-**Prompt-tiedostojen tarkistus (evalkit):** `npm run eval:validate` tarkistaa esimerkkitiedostot
-[evalkit](https://github.com/tonyweckstrom1987/evalkit)-työkalulla ilman verkkokutsuja ja kuluja
-(muoto, kaksoisid:t, virheelliset lausekkeet). CI ajaa sen jokaisella pushilla, joten rikkinäinen
-prompt-tiedosto huomataan ennen kuin `run_eval` kohtaa sen. evalkit lukee tämän taulukkomuodon
-(`expectedContains`, `category`) sellaisenaan.
+**Checking prompt files (evalkit):** `npm run eval:validate` checks the example files with the
+[evalkit](https://github.com/tonyweckstrom1987/evalkit) tool without network calls or costs
+(format, duplicate ids, invalid expressions). CI runs it on every push, so a broken
+prompt file is caught before `run_eval` meets it. evalkit reads this array format
+(`expectedContains`, `category`) as it is.
 
-**Tallennetut vastaukset (llm-cassette):** `test/cassettes/fi.json` sisältää oikean mallin (`deepseek-flash`)
-vastaukset 20 promptiin, ja `test/cassettes/fi.baseline.json` on niistä lasketut tulokset. `npm run eval:replay`
-toistaa vastaukset ilman verkkoa ja avainta ja vertaa baselineen; CI ajaa sen, joten arviointilogiikan
-regressio (esim. tarkistusten muutos) kaatuu CI:ssä. Uusi tallennus (vaatii oman LiteLLM-avaimen, kuluu senttejä):
-aseta `EVALKIT_BASE_URL`, `EVALKIT_MODELS` ja `LLM_API_KEY`, aja `npm run eval:record` ja sen jälkeen
-`npm run eval:anonymize`, joka korvaa oikean osoitteen paikkamerkillä ja kieltäytyy, jos kasetissa on `ts.net`
-tai avaimen näköinen merkkijono.
+**Recorded responses (llm-cassette):** `test/cassettes/fi.json` contains the responses of a real model (`deepseek-flash`)
+to 20 prompts, and `test/cassettes/fi.baseline.json` holds the results computed from them. `npm run eval:replay`
+replays the responses without a network or a key and compares them to the baseline; CI runs it, so a
+regression in the evaluation logic (e.g. a change in the checks) fails CI. For a new recording (needs your own LiteLLM key, costs a few cents):
+set `EVALKIT_BASE_URL`, `EVALKIT_MODELS` and `LLM_API_KEY`, run `npm run eval:record` and then
+`npm run eval:anonymize`, which replaces the real address with a placeholder and refuses if the cassette contains `ts.net`
+or a string that looks like a key.
 
-### Eval-ajo (`run_eval`)
+### Running evals (`run_eval`)
 
-`run_eval` on MCP-työkalu, ei erillinen CLI-komento - se kutsutaan samalla
-tavalla kuin muutkin työkalut (`tools/call`, ks. [Nopea
-kokeilu](#nopea-kokeilu)). Esimerkki HTTP-tilassa, kahdella mallilla ja
-`eval-prompts.fi.json`-sarjalla:
+`run_eval` is an MCP tool, not a separate CLI command - it is called the same
+way as the other tools (`tools/call`, see [Quick start from
+source](#quick-start-from-source)). An example in HTTP mode, with two models
+and the `eval-prompts.fi.json` set:
 
-Mallit rajataan: `run_eval` hyväksyy vain `config.yaml`:n `tasks`-osion mallit (`model`,
-`fallbackModel`) ja listan `eval.allowedModels`. Muu malli hylätään ennen yhtään kutsua, jotta
-tokenin haltija ei voi ohjata kutsuja proxyn kalleimpaan malliin.
+Models are restricted: `run_eval` accepts only the models in the `tasks` section of `config.yaml` (`model`,
+`fallbackModel`) and the list `eval.allowedModels`. Any other model is rejected before a single call is made, so that
+the token holder cannot steer calls to the most expensive model of the proxy.
 
 ```bash
-# palvelin käynnistetty ympäristömuuttujalla EVAL_DIR=/polku/mcp-model-router/examples
+# server started with the environment variable EVAL_DIR=/path/mcp-model-router/examples
 curl -s -X POST http://127.0.0.1:3100/mcp \
   -H "Authorization: Bearer $MCP_AUTH_TOKEN" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
@@ -313,199 +314,201 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   }'
 ```
 
-- `promptSetPath` tulkitaan suhteessa `EVAL_DIR`-hakemistoon (ks.
-  [Tietoturva](#tietoturva)); polku hakemiston ulkopuolelle hylätään.
-- `models`-lista käyttää samoja LiteLLM `model_name`-aliaksia kuin
-  `config.yaml`:n `tasks`-lohko (ks. [Tunnetut
-  rajoitukset](#tunnetut-rajoitukset)) - ei tarvitse olla sama malli kuin
-  jonkin `taskType`:n oletusmalli.
-- `judge`-parametri (valinnainen) ohittaa `config.yaml`:n
-  `eval.judge.enabled`-asetuksen yksittäiselle ajolle. Kun tuomari on
-  päällä, jokainen vastaus lähetetään lisäksi `eval.judge.model`:lle
-  arvioitavaksi asteikolla 1-5 (`config.yaml`:n `eval.judge.systemPrompt`
-  tai oletusarvo) - tämä tekee saman määrän ylimääräisiä mallikutsuja kuin
-  on prompt-tapauksia, joten se maksaa ja kestää enemmän.
-- Jos `db`-instanssi on käytössä (näin on aina, kun palvelin käynnistetään
-  `dist/index.js`:llä - ks. `src/index.ts`), jokainen ajo ja tulosrivi
-  tallennetaan SQLiteen (`eval_run`/`eval_result`-taulut) `DB_PATH`:n
-  osoittamaan tiedostoon, joten ajoja voi vertailla jälkikäteen myös
-  suoraan tietokannasta.
-- Eval voi tehdä paljon mallikutsuja: esim. 2 mallia × 20 promptia = 40
-  (malli, prompt) -paria, ja jokainen kutsu voi kestää useita sekunteja (tai
-  `provider.timeoutMs`/tehtävätyypin oman `timeoutMs`:n verran, jos malli
-  jumiutuu) - ks. [Esimerkki: mitattu vertailu](#esimerkki-mitattu-vertailu).
-  `judge: true` lähes tuplaa ajoajan, koska jokainen vastaus arvioidaan vielä
-  erikseen ylimääräisellä mallikutsulla.
+- `promptSetPath` is resolved relative to the `EVAL_DIR` directory (see
+  [Security](#security)); a path outside the directory is rejected.
+- The `models` list uses the same LiteLLM `model_name` aliases as the
+  `tasks` block of `config.yaml` (see [Known
+  limitations](#known-limitations)) - it does not have to be the same model as
+  the default model of any `taskType`.
+- The `judge` parameter (optional) overrides the `eval.judge.enabled` setting
+  of `config.yaml` for a single run. When the judge is on, every response is
+  additionally sent to `eval.judge.model` to be rated on a scale of 1-5
+  (using `eval.judge.systemPrompt` from `config.yaml` or the default) - this
+  makes as many extra model calls as there are prompt cases, so it costs more
+  and takes longer.
+- If a `db` instance is in use (which is always the case when the server is
+  started with `dist/index.js` - see `src/index.ts`), every run and result row
+  is stored in SQLite (the `eval_run`/`eval_result` tables) in the file that
+  `DB_PATH` points to, so runs can also be compared afterwards directly from
+  the database.
+- An eval can make a lot of model calls: e.g. 2 models × 20 prompts = 40
+  (model, prompt) pairs, and each call can take several seconds (or as long as
+  `provider.timeoutMs`/the task type's own `timeoutMs` if the model hangs) -
+  see [Example: measured comparison](#example-measured-comparison).
+  `judge: true` nearly doubles the run time, because every response is also
+  rated separately with an extra model call.
 
-**Rinnakkaisajo (`eval.concurrency`)**
+**Parallel execution (`eval.concurrency`)**
 
-`run_eval` ajaa (malli, prompt) -parit rinnakkain enintään
-`config.yaml`:n `eval.concurrency`-asetuksen verran samanaikaisesti
-(oletus 4, minimi 1). Toteutus on yksinkertainen rajoitettu työjono
-(`mapWithConcurrency`, ks. `src/eval/runEval.ts`) ilman uusia riippuvuuksia:
-kiinteä määrä "workereita" nostaa jonosta seuraavan käsittelemättömän
-tehtävän kerrallaan, kunnes jono on tyhjä.
+`run_eval` runs (model, prompt) pairs in parallel, at most as many at a time
+as the `eval.concurrency` setting of `config.yaml` allows (default 4, minimum
+1). The implementation is a simple bounded work queue
+(`mapWithConcurrency`, see `src/eval/runEval.ts`) with no new dependencies:
+a fixed number of "workers" take the next unprocessed task from the queue one
+at a time until the queue is empty.
 
-Kutsut ovat käytännössä koko ajan I/O-odotusta (verkkovastaus mallilta),
-eivät CPU-työtä, joten rinnakkaisajo lyhentää kokonaisajoaikaa suoraan
-suhteessa `concurrency`-arvoon - esim. 2 mallia × 20 promptia × judge
-päällä (40 vastauskutsua + 40 judge-kutsua = 80 kutsua) kesti aiemmin
-peräkkäin ajettuna noin 12 minuuttia; `concurrency: 4`:llä samat kutsut
-menevät neljä kerrallaan, mikä lyhentää ajoaikaa merkittävästi samalla
-prompt-sarjalla ja mallivalinnalla.
+The calls are in practice all I/O wait (a network response from the model),
+not CPU work, so parallel execution shortens the total run time directly in
+proportion to the `concurrency` value - e.g. 2 models × 20 prompts × judge on
+(40 response calls + 40 judge calls = 80 calls) used to take about 12 minutes
+when run sequentially; with `concurrency: 4` the same calls go four at a time,
+which shortens the run time considerably with the same prompt set and model
+selection.
 
-Huomioita:
+Notes:
 
-- **Tulosten järjestys säilyy** riippumatta siitä, missä järjestyksessä
-  yksittäiset kutsut valmistuvat: `cases`-taulukko on aina samassa
-  järjestyksessä kuin peräkkäin ajettuna (malli ulompana, prompt sisempänä,
-  `input.models`/prompt-tiedoston järjestyksessä).
-- **Virheenkäsittely on edelleen per kutsu**: yhden kutsun aikakatkaisu tai
-  muu virhe (myös judge-kutsun virhe) ei keskeytä muita rinnakkaisia tai
-  jonossa odottavia kutsuja - se näkyy vain kyseisen tapauksen `error`-
-  kentässä, kuten peräkkäisessäkin ajossa.
-- **Miksi oletus on 4, ei enemmän**: liian suuri rinnakkaisuus voi
-  ylikuormittaa LiteLLM-proxyn tai OpenRouterin rate limitit, jolloin osa
-  kutsuista alkaa epäonnistua 429-virheillä sen sijaan, että eval oikeasti
-  nopeutuisi. Nosta arvoa varovasti oman proxyn/API-avaimen rajojen
-  mukaan, tai laske se `1`:een, jos haluat täysin peräkkäisen (deterministisen
-  ajoituksen kannalta yksinkertaisimman) ajon esim. vianetsintää varten.
+- **Result order is preserved** regardless of the order in which individual
+  calls finish: the `cases` array is always in the same order as in a
+  sequential run (model as the outer loop, prompt as the inner loop, in the
+  order of `input.models`/the prompt file).
+- **Error handling is still per call**: a timeout or other error in one call
+  (including a judge call error) does not interrupt the other parallel or
+  queued calls - it shows only in the `error` field of that case, just as in a
+  sequential run.
+- **Why the default is 4, not more**: too much parallelism can overload the
+  rate limits of the LiteLLM proxy or OpenRouter, so that some calls start to
+  fail with 429 errors instead of the eval actually getting faster. Raise the
+  value carefully according to the limits of your own proxy/API key, or lower
+  it to `1` if you want a fully sequential run (the simplest in terms of
+  deterministic timing), e.g. for troubleshooting.
 
-**Tulosten lukeminen** (`EvalReport`, ks. `src/eval/runEval.ts`):
+**Reading the results** (`EvalReport`, see `src/eval/runEval.ts`):
 
-- `cases`: yksi rivi per (malli, prompt) - sisältää `latencyMs`,
-  `response`-tekstin, `passed` (`true`/`false`/`null` jos
-  `expectedContains`-kenttää ei annettu kyseiselle promptille),
-  `judgeScore` (1-5 tai `null`), `priceUsd` (`null`, jos mallille ei ole
-  hinnastoa `config.yaml`:n `eval.pricing`-lohkossa) ja `error`
-  (virheviesti tai `null`).
-- `perModel`: yhteenveto mallia kohden - `avgLatencyMs`, `passRate`
-  (`expectedContains`-läpäisyosuus 0-1 **virheelliset kutsut pois
-  laskettuna**, `null` jos yhdessäkään promptissa ei ollut
-  `expectedContains`-kenttää), `avgJudgeScore`, `avgPriceUsd` ja
-  `errorCount`/`caseCount`. Tämä on nopein tapa verrata malleja: matalampi
-  `avgPriceUsd` ja `avgLatencyMs` samalla kun `passRate`/`avgJudgeScore`
-  pysyy riittävän korkeana kertoo, mikä malli kannattaa valita
-  `config.yaml`:n `tasks`-lohkoon.
-- `perTaskType`: sama yhteenveto ryhmiteltynä (malli, tehtävätyyppi)
-  -pareittain. Tehtävätyyppi päätellään promptin `id`:n etuliitteestä
-  pudottamalla lopusta `-<numero>`, esim. `"yleinen-01"` → `"yleinen"`,
-  `"pilkkominen-05"` → `"pilkkominen"` (ks.
-  `taskTypeFromPromptId` tiedostossa `src/eval/runEval.ts`) - tämä ei liity
-  `config.yaml`:n `tasks`-avaimiin, vaan on pelkkä nimeämiskäytäntö
-  prompt-tiedostossa. Jokainen rivi sisältää:
-  - `caseCount`, `errorCount` - montako tapausta ja niistä montako virheitä.
-  - `passedCount`/`expectedCount` - montako läpäisi avainsanatarkistuksen
-    niistä tapauksista, joissa `expectedContains` oli annettu (= "läpäisty/n").
-  - `passRateExcludingErrors` - läpäisyosuus laskettuna vain onnistuneista
-    kutsuista (virheelliset kutsut pois sekä osoittajasta että
-    nimittäjästä). Kertoo vastauksen laadun, kun malli ylipäätään vastasi.
-  - `passRateIncludingErrors` - läpäisyosuus laskettuna niin, että virheet
-    (esim. aikakatkaisu) lasketaan läpäisemättömiksi (mukana nimittäjässä).
-    Kertoo tehtävätyypin kokonaisluotettavuuden mallilla.
-  - `avgLatencyMs`, `avgPriceUsd` - kuten `perModel`:ssa, mutta rajattuna
-    tähän tehtävätyyppiin.
-- MCP-työkalun tekstivastaus tiivistää sekä `perModel`- että
-  `perTaskType`-rivit ihmisluettavaksi; koko `EvalReport` (mukaan lukien
-  `cases`) on saatavilla ohjelmallisesti `structuredContent`-kentässä.
+- `cases`: one row per (model, prompt) - contains `latencyMs`, the `response`
+  text, `passed` (`true`/`false`/`null` if the prompt has no
+  `expectedContains` field), `judgeScore` (1-5 or `null`), `priceUsd` (`null`
+  if the model has no price entry in the `eval.pricing` block of
+  `config.yaml`) and `error` (an error message or `null`).
+- `perModel`: a summary per model - `avgLatencyMs`, `passRate` (the share of
+  `expectedContains` passes, 0-1, **with failed calls excluded**, `null` if
+  none of the prompts had an `expectedContains` field), `avgJudgeScore`,
+  `avgPriceUsd` and `errorCount`/`caseCount`. This is the fastest way to
+  compare models: a lower `avgPriceUsd` and `avgLatencyMs` while
+  `passRate`/`avgJudgeScore` stays high enough tells you which model to pick
+  for the `tasks` block of `config.yaml`.
+- `perTaskType`: the same summary grouped by (model, task type) pairs. The
+  task type is derived from the prefix of the prompt `id` by dropping the
+  trailing `-<number>`, e.g. `"yleinen-01"` → `"yleinen"`,
+  `"pilkkominen-05"` → `"pilkkominen"` (see `taskTypeFromPromptId` in
+  `src/eval/runEval.ts`) - this has nothing to do with the `tasks` keys of
+  `config.yaml`, it is just a naming convention in the prompt file. Each row
+  contains:
+  - `caseCount`, `errorCount` - how many cases and how many of them were
+    errors.
+  - `passedCount`/`expectedCount` - how many passed the keyword check among
+    the cases where `expectedContains` was given (= "passed/n").
+  - `passRateExcludingErrors` - the pass rate computed only over successful
+    calls (failed calls are left out of both the numerator and the
+    denominator). It tells the quality of the response when the model did
+    respond at all.
+  - `passRateIncludingErrors` - the pass rate computed so that errors (e.g.
+    a timeout) count as not passed (included in the denominator). It tells the
+    overall reliability of the model for the task type.
+  - `avgLatencyMs`, `avgPriceUsd` - as in `perModel`, but limited to this task
+    type.
+- The text response of the MCP tool summarises both the `perModel` and the
+  `perTaskType` rows in a human-readable form; the whole `EvalReport`
+  (including `cases`) is available programmatically in the
+  `structuredContent` field.
 
-**Judge-tila (`eval.judge`) - luotettavampi laatumittari**
+**Judge mode (`eval.judge`) - a more reliable quality metric**
 
-`expectedContains`-avainsanatarkistus on karkea: se hylkää hyvänkin
-vastauksen, jos se ei sisällä täsmälleen odotettua sanaa (ks. [Esimerkki:
-mitattu vertailu](#esimerkki-mitattu-vertailu) - erityisesti
-kirjoitus/tiivistystehtävissä tämä antaa harhaanjohtavan matalan
-läpäisyprosentin). LLM-tuomari arvioi vastauksen laadun asteikolla 1-5
-riippumatta siitä, osuuko vastaus täsmälleen odotettuun sanamuotoon, ja on
-siksi luotettavampi mittari erityisesti avoimissa (kirjoitus-, tiivistys-,
-pilkkomis-) tehtävissä.
+The `expectedContains` keyword check is coarse: it rejects even a good
+response if it does not contain exactly the expected word (see [Example:
+measured comparison](#example-measured-comparison) - especially on
+writing/summarising tasks it gives a misleadingly low pass rate). The LLM
+judge rates the quality of the response on a scale of 1-5 regardless of
+whether the response hits the expected wording exactly, and is therefore a
+more reliable metric especially for open-ended (writing, summarising,
+decomposition) tasks.
 
-Ota judge käyttöön joko pysyvästi `config.yaml`:ssa tai yksittäiselle ajolle:
+Enable the judge either permanently in `config.yaml` or for a single run:
 
 ```yaml
 eval:
   judge:
     enabled: true
-    model: openrouter/openai/gpt-4o-mini   # tuomarina toimiva malli
+    model: openrouter/openai/gpt-4o-mini   # the model acting as judge
     systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
 ```
 
-tai välitä `"judge": true` `run_eval`-kutsun `arguments`-kenttään (ks.
-esimerkki yllä) - tämä ohittaa `config.yaml`:n asetuksen vain kyseiselle
-ajolle. Tuloksena `EvalCaseResult.judgeScore`/`EvalModelSummary.avgJudgeScore`
-täyttyvät `null`:n sijaan. Huomaa hintavaikutus: judge tekee yhden
-ylimääräisen mallikutsun jokaista prompt-tapausta kohden, joten se sekä
-maksaa että kestää suunnilleen kaksinkertaisesti verrattuna
-avainsanatarkistukseen.
+or pass `"judge": true` in the `arguments` field of the `run_eval` call (see
+the example above) - this overrides the `config.yaml` setting for that run
+only. As a result `EvalCaseResult.judgeScore`/`EvalModelSummary.avgJudgeScore`
+are filled in instead of `null`. Note the effect on cost: the judge makes one
+extra model call per prompt case, so it both costs and takes roughly twice as
+much as the keyword check.
 
-Tuomarikutsun `max_tokens` on oletuksena 64, koska vastaus on yksi numero.
-Jos tuomarimalli käyttää päättelytokeneita, nosta arvoa valinnaisella
-`eval.judge.maxTokens`-asetuksella (1-4096). Jos tuomaripistettä ei saada
-(kutsu epäonnistuu tai vastauksesta ei löydy yksiselitteistä pistettä 1-5),
-piste jää `null`:ksi, ja syy näkyy tapauksen `judgeError`-kentässä sekä
-mallikohtaisessa `judgeErrorCount`-luvussa.
+The `max_tokens` of a judge call is 64 by default, because the response is a
+single number. If the judge model uses reasoning tokens, raise the value with
+the optional `eval.judge.maxTokens` setting (1-4096). If no judge score is
+obtained (the call fails or the response has no unambiguous score from 1 to
+5), the score is left as `null`, and the reason shows in the `judgeError` field
+of the case and in the per-model `judgeErrorCount` figure.
 
-**Valitse `eval.judge.model` eri malliksi kuin arvioitavat mallit.** Malli
-suosii tyypillisesti omaa vastaustyyliään (esim. omaa tapaansa jäsentää
-vastaus tai muotoilla lauseet), jolloin sama malli tuomarina antaisi
-korkeampia pisteitä omaa tyyliään muistuttaville vastauksille - tämä vinouttaa
-vertailua juuri sitä mallia suosivaksi. Käytä siis tuomarina mallia, joka ei
-ole yksikään `run_eval`-kutsun `models`-listalla olevista.
+**Choose `eval.judge.model` to be a different model than the models under
+evaluation.** A model typically favours its own response style (e.g. its own
+way of structuring a response or phrasing sentences), so the same model as a
+judge would give higher scores to responses resembling its own style - this
+skews the comparison in favour of that very model. So use as the judge a model
+that is not on the `models` list of any `run_eval` call.
 
-## Esimerkki: mitattu vertailu
+## Example: measured comparison
 
-Alla yhden oikean `run_eval`-ajon tulokset (`examples/eval-prompts.fi.json`,
-20 promptia, judge pois päältä), joissa verrattiin kahta OpenRouterin kautta
-LiteLLM-proxyn taakse ajettua mallia: `deepseek-v4.1-flash` vs.
-`qwen3-coder`.
+Below are the results of one real `run_eval` run (`examples/eval-prompts.fi.json`,
+20 prompts, judge off) that compared two models run through OpenRouter behind
+a LiteLLM proxy: `deepseek-v4.1-flash` vs. `qwen3-coder`. Numbers use English
+formatting (a comma as the thousands separator and a point as the decimal
+separator).
 
-**Kokonaisuus:**
+**Overall:**
 
-| Malli               | Läpäisy       | Viive ka. | Hinta ka./kutsu |
-|---------------------|---------------|-----------|------------------|
-| deepseek-v4.1-flash | 83 % (15/18, 2 aikakatkaisua) | 14 802 ms | 0,000744 USD |
-| qwen3-coder         | 85 % (17/20)  | 9 887 ms  | 0,000466 USD |
+| Model               | Pass rate     | Avg. latency | Avg. price/call |
+|---------------------|---------------|--------------|------------------|
+| deepseek-v4.1-flash | 83 % (15/18, 2 timeouts) | 14,802 ms | 0.000744 USD |
+| qwen3-coder         | 85 % (17/20)  | 9,887 ms     | 0.000466 USD |
 
-**Tehtävätyypeittäin** (läpäisty/n, viive ka., hinta ka. USD/kutsu):
+**By task type** (passed/n, avg. latency, avg. price in USD/call):
 
-| Tehtävätyyppi | deepseek-v4.1-flash | qwen3-coder |
+| Task type | deepseek-v4.1-flash | qwen3-coder |
 |---|---|---|
-| yleinen | 5/5, 2 190 ms, 0,000119 | 5/5, 5 600 ms, 0,000159 |
-| koodaus | 5/5, 4 025 ms, 0,000278 | 5/5, 3 742 ms, 0,000188 |
-| kirjoitus | 3/5, 7 841 ms, 0,000416 | 3/5, 1 567 ms, 0,000121 |
-| pilkkominen | 2/5 (+2 aikakatkaisua), 45 151 ms, 0,001867 | 4/5, 28 640 ms, 0,001395 |
+| yleinen (general) | 5/5, 2,190 ms, 0.000119 | 5/5, 5,600 ms, 0.000159 |
+| koodaus (coding) | 5/5, 4,025 ms, 0.000278 | 5/5, 3,742 ms, 0.000188 |
+| kirjoitus (writing) | 3/5, 7,841 ms, 0.000416 | 3/5, 1,567 ms, 0.000121 |
+| pilkkominen (decomposition) | 2/5 (+2 timeouts), 45,151 ms, 0.001867 | 4/5, 28,640 ms, 0.001395 |
 
-**Tulkinta:** kokonaisläpäisy on lähellä molemmilla malleilla, mutta
-`qwen3-coder` on sekä nopeampi että halvempi joka tehtävätyypissä tässä
-ajossa, ja se selvisi pilkkomistehtävistä ilman aikakatkaisuja.
-`deepseek-v4.1-flash`:n kaksi aikakatkaisua osuivat molemmat
-pilkkomistehtäviin (60 s oletusaikakatkaisulla) - ks.
-[Tehtävätyyppikohtainen aikakatkaisu](#tehtävätyyppikohtainen-aikakatkaisu-timeoutms),
-joka on juuri tätä varten.
+**Interpretation:** the overall pass rate is close for both models, but
+`qwen3-coder` is both faster and cheaper in every task type in this run
+except that it was slower on the general task type, and it got through the
+decomposition tasks without timeouts. The two timeouts of
+`deepseek-v4.1-flash` both hit decomposition tasks (with the 60 s default
+timeout) - see
+[Per-task-type timeout](#per-task-type-timeout-timeoutms), which exists for
+exactly this.
 
-**Rajoitukset - lue nämä luvut varoen:**
+**Limitations - read these numbers with care:**
 
-- **Pieni otos**: vain 5 promptia per tehtävätyyppi (20 yhteensä). Yksikin
-  tapaus muuttaa prosenttilukua 20 %-yksiköllä; tuloksia ei pidä yleistää
-  suoraan muihin promptteihin tai käyttötapauksiin.
-- **Avainsanatarkistus arvioi kirjoitustehtäviä huonosti**: `expectedContains`
-  hylkää muuten hyvän vastauksen, jos se ei sisällä täsmälleen odotettua
-  sanaa - kirjoitus/tiivistys-sarakkeen 3/5-luvut molemmilla malleilla
-  todennäköisesti aliarvioivat todellisen laadun. Ks. [Judge-tila](#eval-ajo-run_eval)
-  luotettavampaa vaihtoehtoa varten.
-- **Deepseekin aikakatkaisut** nostivat sen keskiviivettä ja hintaa
-  pilkkomis-sarakkeessa merkittävästi (60 s per aikakatkaisu lasketaan
-  mukaan viiveeseen) - ilman niitä keskiviive olisi ollut matalampi.
-- **Tulokset ovat yhdestä ajosta** (run `be440639-9aa7-4330-8c66-8cb2ed27b9ef`)
-  tiettynä ajankohtana ja riippuvat mallien senhetkisistä versioista sekä
-  OpenRouterin kuormasta/saatavuudesta - ne eivät ole pysyvä benchmark-tulos,
-  vaan esimerkki siitä, miten `run_eval`:n tulosraporttia luetaan. Aja oma
-  eval omilla prompteillasi ennen tuotantopäätöksiä.
+- **Small sample**: only 5 prompts per task type (20 in total). A single case
+  changes the percentage by 20 percentage points; the results should not be
+  generalised directly to other prompts or use cases.
+- **The keyword check rates writing tasks poorly**: `expectedContains`
+  rejects an otherwise good response if it does not contain exactly the
+  expected word - the 3/5 figures in the writing/summarising row for both
+  models probably underestimate the real quality. See [Judge mode](#running-evals-run_eval)
+  for a more reliable alternative.
+- **Deepseek's timeouts** raised its average latency and price in the
+  decomposition column significantly (60 s per timeout is counted in the
+  latency) - without them the average latency would have been lower.
+- **The results are from a single run** (run `be440639-9aa7-4330-8c66-8cb2ed27b9ef`)
+  at a particular time and depend on the model versions of that moment and on
+  OpenRouter's load/availability - they are not a lasting benchmark result,
+  but an example of how to read the result report of `run_eval`. Run your own
+  eval with your own prompts before production decisions.
 
-## Claude Desktop / Cursor -asetus
+## Claude Desktop / Cursor configuration
 
-`claude_desktop_config.json` (tai vastaava Cursorin MCP-asetustiedosto),
-stdio-siirtotavalla:
+`claude_desktop_config.json` (or the corresponding Cursor MCP settings file),
+with the stdio transport:
 
 ```json
 {
@@ -524,35 +527,35 @@ stdio-siirtotavalla:
 }
 ```
 
-Jos palvelin pyörii jo HTTP-tilassa (esim. omassa LXC-kontissa), monet
-MCP-klientit tukevat myös suoraa streamable HTTP -yhteyttä osoitteeseen
-`http://<tailscale-host>:3100/mcp` ilman `command`-käynnistystä - katso oman
-klienttisi dokumentaatio.
+If the server is already running in HTTP mode (e.g. in its own LXC container),
+many MCP clients also support a direct streamable HTTP connection to
+`http://<tailscale-host>:3100/mcp` without a `command` launch - see the
+documentation of your client.
 
-## Ajaminen Proxmox-LXC:ssä
+## Running in a Proxmox LXC
 
-Ei Dockeria - palvelin ajetaan suoraan Node-prosessina systemd-yksikkönä.
+No Docker - the server runs directly as a Node process under a systemd unit.
 
-1. Luo (tai käytä) Debian/Ubuntu-pohjainen LXC-kontti, asenna Node.js 22 tai 24.
-2. Kloonaa repo `/opt/mcp-model-router`-hakemistoon ja aja:
+1. Create (or use) a Debian/Ubuntu-based LXC container and install Node.js 22 or 24.
+2. Clone the repository into `/opt/mcp-model-router` and run:
    ```bash
    cd /opt/mcp-model-router
    npm ci
    npm run build
-   cp config.example.yaml config.yaml   # muokkaa
+   cp config.example.yaml config.yaml   # edit
    ```
-3. Luo palvelulle oma käyttäjä ja data-hakemisto:
+3. Create a dedicated user and data directory for the service:
    ```bash
    useradd --system --home /opt/mcp-model-router --shell /usr/sbin/nologin mcp-model-router
    mkdir -p /opt/mcp-model-router/data
    chown -R mcp-model-router:mcp-model-router /opt/mcp-model-router
    ```
-4. Kopioi ympäristötiedosto ja täytä arvot (ei versionhallintaan):
+4. Copy the environment file and fill in the values (not into version control):
    ```bash
    cp systemd/mcp-model-router.env.example /opt/mcp-model-router/mcp-model-router.env
    chmod 600 /opt/mcp-model-router/mcp-model-router.env
    ```
-5. Asenna systemd-yksikkö, ks. valmis esimerkki
+5. Install the systemd unit; see the ready-made example
    [`systemd/mcp-model-router.service`](./systemd/mcp-model-router.service):
    ```bash
    cp systemd/mcp-model-router.service /etc/systemd/system/
@@ -561,119 +564,115 @@ Ei Dockeria - palvelin ajetaan suoraan Node-prosessina systemd-yksikkönä.
    systemctl status mcp-model-router
    ```
 
-Yksikkö kuuntelee `MCP_HTTP_HOST`-osoitteessa (aseta env-tiedostoon kontin
-Tailscale-osoite `tailscale ip -4`), jolloin muut LXC-kontit tavoittavat
-palvelimen Tailscale-verkon yli. Env-tiedostossa täytyy olla `MCP_AUTH_TOKEN`
-(väh. 32 merkkiä), muuten palvelin ei käynnisty, ja clientien täytyy lähettää se
-Bearer-otsakkeessa. Aseta myös `EVAL_DIR`, jos käytät `run_eval`ia. Pääsy
-rajataan lisäksi Tailscale ACL:eillä.
+The unit listens on the `MCP_HTTP_HOST` address (set the container's
+Tailscale address, `tailscale ip -4`, in the env file), so that other LXC
+containers can reach the server over the Tailscale network. The env file must
+contain `MCP_AUTH_TOKEN` (at least 32 characters), otherwise the server does
+not start, and clients must send it in the Bearer header. Also set
+`EVAL_DIR` if you use `run_eval`. Access is additionally restricted with
+Tailscale ACLs.
 
-## Tietoturva
+## Security
 
-Periaate: rajat ovat koodissa ja ne epäonnistuvat suljetusti (virhetilassa
-kielletään). Mitään alla olevista rajoista ei voi löysätä ympäristömuuttujalla,
-`config.yaml`:lla eikä työkalun parametrilla.
+Principle: the limits are in the code and they fail closed (in an error
+state, the action is denied). None of the limits below can be loosened with an
+environment variable, with `config.yaml` or with a tool parameter.
 
-**Bearer-tunnistus (`MCP_AUTH_TOKEN`).** HTTP-tilassa `/mcp` (POST, GET,
-DELETE) vaatii otsakkeen `Authorization: Bearer <token>`.
+**Bearer authentication (`MCP_AUTH_TOKEN`).** In HTTP mode `/mcp` (POST, GET,
+DELETE) requires the header `Authorization: Bearer <token>`.
 
-- Palvelin **ei käynnisty** HTTP-tilassa, jos `MCP_AUTH_TOKEN` puuttuu tai on
-  alle 32 merkkiä. Luo token esim. `openssl rand -hex 32`.
-- Puuttuva otsake, väärä skeema ja väärä token antavat täsmälleen saman
-  401-vastauksen, joka ei paljasta syytä. Vertailu on vakioaikainen
-  (`crypto.timingSafeEqual` SHA-256-tiivisteillä, joten eri pituiset syötteet
-  eivät vuoda tietoa).
-- Tokenia ei kirjoiteta lokiin eikä virheilmoituksiin. Pidä se
-  ympäristötiedostossa (`chmod 600`), ei versionhallinnassa.
-- Oletus-bind on `127.0.0.1`. `/healthz` on avoin eikä palauta muuta kuin
+- The server **does not start** in HTTP mode if `MCP_AUTH_TOKEN` is missing or
+  shorter than 32 characters. Create a token with e.g. `openssl rand -hex 32`.
+- A missing header, a wrong scheme and a wrong token all give exactly the same
+  401 response, which does not reveal the reason. The comparison is
+  constant-time (`crypto.timingSafeEqual` on SHA-256 digests, so inputs of
+  different lengths do not leak information).
+- The token is not written to logs or error messages. Keep it in an
+  environment file (`chmod 600`), not in version control.
+- The default bind is `127.0.0.1`. `/healthz` is open and returns nothing but
   `{"status":"ok"}`.
-- Stdio-tila ei käytä tokenia (prosessi on paikallinen).
-- Token ei korvaa verkkotason rajausta: käytä edelleen Tailscale ACL:iä äläkä
-  kuuntele `0.0.0.0`:ssa.
-- **Bearer-token kulkee HTTP:ssä salaamattomana.** Käytä HTTP-tilaa vain
-  Tailscalen (WireGuard) tai localhostin kautta, ei koskaan avoimen verkon yli.
-- **Tunnettu rajoitus:** MCP SDK:n Express-sovellus jäsentää JSON-rungon ennen
-  Bearer-tarkistusta, joten tunnistamaton pyyntö voi kuluttaa hieman
-  jäsentimen aikaa. Rungon koko on rajattu, ja palvelin kuuntelee oletuksena
-  vain `127.0.0.1`:ssä. Älä altista palvelinta julkiseen verkkoon.
+- The stdio mode does not use a token (the process is local).
+- The token does not replace network-level restriction: keep using Tailscale
+  ACLs and do not listen on `0.0.0.0`.
+- **The Bearer token travels unencrypted over HTTP.** Use HTTP mode only over
+  Tailscale (WireGuard) or localhost, never over an open network.
+- Authentication runs before the JSON body is parsed, so the body of an
+  unauthenticated request is not read. A parse error in an authenticated
+  request returns the JSON-RPC error `-32700 Parse error`. The DNS rebinding
+  protection (Host header check) is applied before that.
 
-**`run_eval`-tiedostopolut (`EVAL_DIR`).** `run_eval` lukee prompt-tiedostoja
-vain yhdestä hakemistosta.
+**`run_eval` file paths (`EVAL_DIR`).** `run_eval` reads prompt files from a
+single directory only.
 
-- Jos `EVAL_DIR` ei ole asetettu, `run_eval` kieltäytyy kaikista poluista.
-- Polku ratkaistaan `realpath`illa ja verrataan hakemistoon: `../`-polut,
-  hakemiston ulkopuoliset absoluuttiset polut ja ulos johtavat symlinkit
-  hylätään. Suhteelliset polut tulkitaan `EVAL_DIR`:in suhteen.
-- Vain `.json`-päätteet (kirjainkoolla ei väliä), tarkistus `realpath`in jälkeen.
-- Hylkäysviesti on aina sama eikä sisällä polkua.
+- If `EVAL_DIR` is not set, `run_eval` refuses all paths.
+- The path is resolved with `realpath` and compared to the directory: `../`
+  paths, absolute paths outside the directory and symlinks that lead out are
+  rejected. Relative paths are interpreted relative to `EVAL_DIR`.
+- Only `.json` extensions (case-insensitive), checked after `realpath`.
+- The rejection message is always the same and does not contain the path.
 
-**Kustannuskatot** (vakiot tiedostossa [`src/lib/limits.ts`](./src/lib/limits.ts),
-tarkistus `callChatCompletion`issa, joten ne kattavat `route_and_complete`n,
-`run_eval`in ja judgen):
+**Cost caps** (constants in [`src/lib/limits.ts`](./src/lib/limits.ts),
+checked in `callChatCompletion`, so they cover `route_and_complete`,
+`run_eval` and the judge):
 
-| Raja | Arvo | Käytös |
-|------|------|--------|
-| `max_tokens` per kutsu | 4096 | Suurempi pyydetty `maxTokens` **hylätään virheellä** (ei pienennetä hiljaa). Jos arvoa ei anneta, rajapinnalle lähetetään 4096. |
-| Mallikutsuja per `run_eval` | 200 | Lasketaan mallit × promptit (× 2, jos judge on päällä). Ylitys hylätään ennen ensimmäistä kutsua. |
-| Päiväbudjetti | 1 000 000 tokenia / päivä | Päivä on `Europe/Helsinki`-ajassa. |
+| Limit | Value | Behaviour |
+|-------|-------|-----------|
+| `max_tokens` per call | 4096 | A larger requested `maxTokens` is **rejected with an error** (not silently reduced). If no value is given, 4096 is sent to the API. |
+| Model calls per `run_eval` | 200 | Counted as models × prompts (× 2 if the judge is on). Exceeding it is rejected before the first call. |
+| Daily budget | 1,000,000 tokens / day | A day is defined in `Europe/Helsinki` time. |
 
-Päiväbudjetti toimii varausperiaatteella: ennen jokaista kutsua varataan
-syötteen arvio + `max_tokens` SQLiten `token_budget`-taulusta
-`BEGIN IMMEDIATE` -transaktiossa (tarkistus ja varaus ovat jakamaton
-kokonaisuus, joten rinnakkaiset kutsut eivät ohita rajaa). Kutsun jälkeen
-varaus korjataan vastauksen `usage`-arvoon. Jos `usage` puuttuu, varaus jää
-voimaan. Epäonnistunut ja tyhjä vastaus kuluttavat budjettia. Budjetin ylitys
-ei käynnistä varamallia. Rajan muuttaminen vaatii koodimuutoksen.
+The daily budget works on a reservation principle: before every call, the
+input estimate + `max_tokens` is reserved from the SQLite `token_budget` table
+in a `BEGIN IMMEDIATE` transaction (the check and the reservation are
+indivisible, so parallel calls cannot bypass the limit). After the call the
+reservation is corrected to the `usage` value of the response. If `usage` is
+missing, the reservation stays in effect. A failed and an empty response
+consume budget. Exceeding the budget does not trigger the fallback model.
+Changing the limit requires a code change.
 
-**Tyhjät vastaukset.** Tyhjä, vain välilyöntejä sisältävä tai puuttuva
-vastaus on virhe `vastaus_tyhja`, ei onnistuminen. `run_eval`issa se on
-epäonnistunut tapaus (`passed: false`, `error` alkaa `vastaus_tyhja`) ja
-lasketaan läpäisyprosentin nimittäjään.
+**Empty responses.** An empty, whitespace-only or missing response is the
+error `vastaus_tyhja`, not a success. In `run_eval` it is a failed case
+(`passed: false`, `error` starts with `vastaus_tyhja`) and is counted in the
+denominator of the pass rate.
 
-## Kehitys
+## Development
 
 ```bash
-npm run dev          # tsx, stdio-siirtotapa suoraan lähdekoodista
+npm run dev          # tsx, stdio transport straight from the source
 npm run typecheck    # tsc --noEmit
-npm test             # vitest, HTTP-kutsut mockattu undicilla
+npm test             # vitest, HTTP calls mocked with undici
 ```
 
-CI ajaa lisäksi [mcp-doctorin](https://github.com/tonyweckstrom1987/mcp-doctor) (MCP-kättely, työkalujen skeemat ja verkoton savuajo `test/mcp-doctor/smoke.json`). Paikallisesti:
+CI also runs [mcp-doctor](https://github.com/tonyweckstrom1987/mcp-doctor) (MCP handshake, tool schemas and an offline smoke run `test/mcp-doctor/smoke.json`). Locally:
 
 ```bash
 npm run build
 CONFIG_PATH=$PWD/config.example.yaml npx @tonyweckstrom/mcp-doctor --env CONFIG_PATH --strict --smoke test/mcp-doctor/smoke.json -- node dist/index.js
 ```
 
-## Tunnetut rajoitukset
+## Known limitations
 
-- HTTP-tilan tunnistus on yksi jaettu Bearer-token (ei käyttäjä- tai
-  agenttikohtaisia tunnuksia, ei tokenin kierrätystä ajon aikana), eikä
-  palvelin itse salaa liikennettä (HTTP ei salaa tokenia), joten liikenne
-  saa kulkea vain `127.0.0.1`:n tai Tailscalen kautta.
-- MCP SDK:n Express-sovellus jäsentää JSON-rungon ennen Bearer-tarkistusta,
-  joten tunnistamaton pyyntö ehtii kuluttaa hieman jäsennysaikaa (rungon koko
-  on rajattu). Tämä hyväksytään tietoisesti: oman Express-sovelluksen
-  kirjoittaminen SDK:n tilalle toisi enemmän omaa koodia ja riskiä kuin
-  hyötyä, ja palvelin kuuntelee oletuksena vain `127.0.0.1`:ssä (tai
-  Tailscalessa).
-- Päiväbudjetti on tokenipohjainen ja kattaa vain tämän palvelimen kautta
-  tehdyt kutsut; se ei tiedä LiteLLM:n/OpenRouterin muista asiakkaista tulevaa
-  kulutusta (`get_usage` näyttää sen).
-- Syötteen tokenimäärä on arvio (merkkimäärä / 3); varaus korjataan
-  toteutuneeseen `usage`-arvoon vasta kutsun jälkeen.
-- Ei automaattista mallilistan hakua LiteLLM:n `/models`-rajapinnasta -
-  `list_models` lukee vain `config.yaml`:n.
-- Eval-hinta-arvio perustuu `config.yaml`:n `eval.pricing`-hinnastoon, ei
-  automaattiseen hintojen hakuun OpenRouterista.
-- `get_usage` vaatii, että LiteLLM on käynnistetty tietokannan (Postgres)
-  kanssa ja että `USAGE_API_KEY` on LiteLLM:n **pääavain** (`LITELLM_MASTER_KEY`),
-  koska `/user/info` on hallintarajapinta. Ilman tietokantaa LiteLLM palauttaa
-  `"Database not connected"` (HTTP 500), ja `get_usage` välittää tämän virheen
-  sellaisenaan kutsujalle. Pelkkä OpenRouter-käyttö (`usage.provider: openrouter`)
-  ei vaadi tietokantaa.
-- `tasks`-lohkon ja `run_eval`:n mallitunnisteet ovat LiteLLM:n
-  `model_name`-aliaksia (LiteLLM-konfiguraatiossa/proxy-mallilistassa
-  määriteltyjä nimiä), eivät suoraan OpenRouterin tai muun taustapalvelun
-  omia mallitunnisteita - ks. [Mallitunnisteet: LiteLLM vs. suora
-  OpenRouter](#mallitunnisteet-litellm-vs-suora-openrouter).
+- HTTP mode authentication is a single shared Bearer token (no per-user or
+  per-agent credentials, no token rotation at run time), and the server does
+  not encrypt traffic itself (HTTP does not encrypt the token), so traffic may
+  travel only through `127.0.0.1` or Tailscale.
+- The daily budget is token-based and covers only calls made through this
+  server; it does not know about consumption by other LiteLLM/OpenRouter
+  clients (`get_usage` shows it).
+- The input token count is an estimate (character count / 3); the reservation
+  is corrected to the actual `usage` value only after the call.
+- There is no automatic model list fetch from LiteLLM's `/models` API -
+  `list_models` reads only `config.yaml`.
+- The eval price estimate is based on the `eval.pricing` price list in
+  `config.yaml`, not on automatic price lookup from OpenRouter.
+- `get_usage` requires that LiteLLM has been started with a database
+  (Postgres) and that `USAGE_API_KEY` is LiteLLM's **master key**
+  (`LITELLM_MASTER_KEY`), because `/user/info` is an admin API. Without a
+  database LiteLLM returns `"Database not connected"` (HTTP 500), and
+  `get_usage` passes this error on to the caller as it is. OpenRouter-only
+  use (`usage.provider: openrouter`) does not require a database.
+- The model identifiers of the `tasks` block and of `run_eval` are LiteLLM
+  `model_name` aliases (names defined in the LiteLLM configuration/proxy model
+  list), not directly the model identifiers of OpenRouter or another backend
+  - see [Model identifiers: LiteLLM vs. direct
+  OpenRouter](#model-identifiers-litellm-vs-direct-openrouter).
