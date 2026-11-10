@@ -636,7 +636,10 @@ lasketaan läpäisyprosentin nimittäjään.
 npm run dev          # tsx, stdio-siirtotapa suoraan lähdekoodista
 npm run typecheck    # tsc --noEmit
 npm test             # vitest, HTTP-kutsut mockattu undicilla
+python -m unittest discover   # tools/automerge.py:n testit (vain stdlib)
 ```
+
+Python-työkalut (`tools/`) tukevat Python-versioita 3.10-3.13; CI ajaa testit kaikilla neljällä.
 
 CI ajaa lisäksi [mcp-doctorin](https://github.com/tonyweckstrom1987/mcp-doctor) (MCP-kättely, työkalujen skeemat ja verkoton savuajo `test/mcp-doctor/smoke.json`). Paikallisesti:
 
