@@ -13,6 +13,7 @@ Kaikki merkittävät muutokset kirjataan tähän tiedostoon. Muoto noudattaa
 - Puuttuvan asetustiedoston virhe on englanniksi, kertoo absoluuttisen polun ja korjauksen eikä tulosta pinojälkeä. Poistumiskoodi on edelleen 1.
 
 ### Korjattu
+- Riippuvuudet: transitiivinen `@hono/node-server` (tulee `@modelcontextprotocol/sdk`:n kautta) nostettu lukitustiedostossa 2.1.1 → 2.1.8, mikä poistaa `npm audit` -varoituksen GHSA-rmxm-3fg6-px4f (kohtalainen, `serveStatic`-polun kaksoisdekoodaus). Router ei käytä `serveStatic`-toimintoa, joten käytännön riski oli matala. `package.json` ei muuttunut.
 - HTTP-tila: Bearer-tunnistus ajetaan ennen JSON-jäsennystä. Tunnistamattoman pyynnön bodya ei enää lueta, joten virheellinen JSON tai liian suuri body antaa 401:n eikä Expressin HTML-virhesivua pinojälkineen. Tunnistetun pyynnön jäsennysvirhe palauttaa JSON-RPC-virheen `-32700 Parse error` (katselmointi 28.10., löydös 9). DNS rebinding -suoja (Host-otsakkeen tarkistus) toimii kuten ennen.
 - HTTP-tila: pyyntökohtainen `McpServer` ja transport suljetaan nyt myös, kun `connect` tai `handleRequest` heittää tai yhteys sulkeutuu kesken käsittelyn; aiemmin ne jäivät auki (löydös 8).
 - `run_eval`: LLM-tuomarin pisteiden poiminta ei enää lue ensimmäistä numeroa 1-5 mistä tahansa tekstistä. Vastaukset kuten "10/10" tai "vuonna 2024" eivät enää anna pisteitä 1 tai 2; epäselvä vastaus jättää pisteen pois sen sijaan, että vääristäisi keskiarvoa (katselmointi 28.10., löydös 10).
