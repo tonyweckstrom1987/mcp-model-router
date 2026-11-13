@@ -642,7 +642,10 @@ denominator of the pass rate.
 npm run dev          # tsx, stdio transport straight from the source
 npm run typecheck    # tsc --noEmit
 npm test             # vitest, HTTP calls mocked with undici
+python -m unittest discover   # tests for tools/automerge.py (stdlib only)
 ```
+
+The Python tools (`tools/`) support Python 3.10-3.13; CI runs the tests on all four.
 
 CI also runs [mcp-doctor](https://github.com/tonyweckstrom1987/mcp-doctor) (MCP handshake, tool schemas and an offline smoke run `test/mcp-doctor/smoke.json`). Locally:
 
