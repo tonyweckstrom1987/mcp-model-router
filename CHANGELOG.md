@@ -5,6 +5,9 @@ Kaikki merkittävät muutokset kirjataan tähän tiedostoon. Muoto noudattaa
 
 ## [Unreleased]
 
+### Korjattu
+- Jos palveluntarjoaja (LiteLLM, OpenRouter tai välissä oleva proxy) toisti API-avaimen virhevastauksessa, avain päätyi virheviestiin: MCP-asiakkaalle, `route_and_complete`-kutsulokiin, eval-tuloksiin ja `get_usage`-virheeseen. Nyt `provider.apiKey` ja `usage.apiKey` peitetään (`***`) virherungosta ennen katkaisua (500/300 merkkiä), joten avain ei vuoda myöskään osittain katkaisukohdassa. Alle 8 merkin avaimia ei peitetä.
+
 ## [0.1.2] - julkaisupäivä täydennetään
 
 ### Lisätty

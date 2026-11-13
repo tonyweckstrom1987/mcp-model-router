@@ -1,5 +1,5 @@
 import type { UsageConfig } from "../config/schema.js";
-import { authHeaders, joinUrl } from "../lib/openaiClient.js";
+import { authHeaders, joinUrl, redactSecret } from "../lib/openaiClient.js";
 
 /**
  * Lukee kulutuksen ja budjetin tilan LiteLLM:n tai OpenRouterin omista
@@ -26,7 +26,7 @@ async function getJson(url: string, config: UsageConfig, nimi: string): Promise<
     const res = await fetch(url, { headers: authHeaders(config.apiKey), signal: AbortSignal.timeout(ms) });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`${nimi}-kulutustietojen haku epäonnistui (${res.status} ${res.statusText}): ${body.slice(0, 300)}`);
+      throw new Error(`${nimi}-kulutustietojen haku epäonnistui (${res.status} ${res.statusText}): ${redactSecret(body, config.apiKey).slice(0, 300)}`);
     }
     return await res.json();
   } catch (err) {

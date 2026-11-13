@@ -45,6 +45,19 @@ export function authHeaders(apiKey?: string): Record<string, string> {
   return apiKey ? { authorization: `Bearer ${apiKey}` } : {};
 }
 
+/** Lyhyempää avainta ei peitetä: se osuisi tavalliseen tekstiin ja sotkisi virheviestin. */
+export const MIN_REDACT_LENGTH = 8;
+
+/**
+ * Peittää API-avaimen palveluntarjoajan virherungosta ennen kuin runko päätyy
+ * virheviestiin (MCP-asiakkaalle, kutsulokiin ja eval-tuloksiin). Peitetään
+ * ennen katkaisua, jotta avain ei vuoda osittain katkaisukohdassa.
+ */
+export function redactSecret(text: string, secret: string | undefined): string {
+  if (!secret || secret.length < MIN_REDACT_LENGTH) return text;
+  return text.split(secret).join("***");
+}
+
 export async function callChatCompletion(opts: CallChatCompletionOptions): Promise<ChatCompletionResult> {
   // 1) Kattotarkistus ennen mitään muuta: liian suurta max_tokensia ei pienennetä hiljaa, vaan kutsu hylätään.
   if (opts.maxTokens !== undefined) {
@@ -85,7 +98,7 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Mallipyyntö malliin '${opts.model}' epäonnistui (${res.status} ${res.statusText}): ${body.slice(0, 500)}`);
+      throw new Error(`Mallipyyntö malliin '${opts.model}' epäonnistui (${res.status} ${res.statusText}): ${redactSecret(body, opts.apiKey).slice(0, 500)}`);
     }
 
     const json = (await res.json()) as {
