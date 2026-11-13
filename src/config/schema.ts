@@ -25,6 +25,9 @@ export const ProviderConfigSchema = z.object({
   // Vaikuttaa siihen, karsitaanko "openrouter/"-etuliite mallitunnisteesta
   // ennen rajapintakutsua - ks. src/lib/modelId.ts.
   kind: z.enum(["litellm", "openrouter"]).default("litellm"),
+  // list_models: mallilistan (/models) välimuistin kesto ja haun aikakatkaisu (ms).
+  modelsCacheTtlMs: z.number().int().min(0).max(3_600_000).optional(),
+  modelsTimeoutMs: z.number().int().positive().max(120_000).optional(),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 

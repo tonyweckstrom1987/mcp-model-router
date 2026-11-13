@@ -73,7 +73,7 @@ check, see [Installation](#installation) and [Running](#running).
 
 ## Try it without an LLM key
 
-`list_models` only reads `config.yaml`, so you can try it without LiteLLM or an API key. In stdio mode the server reads JSON-RPC messages from stdin (`sleep 2` keeps the pipe open until the response has arrived):
+`list_models` works without LiteLLM or an API key: when the `/models` fetch fails, it shows the models from `config.yaml` together with a warning. In stdio mode the server reads JSON-RPC messages from stdin (`sleep 2` keeps the pipe open until the response has arrived):
 
 The command uses `dist/index.js`, so first run `npm install && npm run build` (see [Installation](#installation)).
 
@@ -254,7 +254,7 @@ tasks:
 | Tool                  | Description                                                            |
 |-----------------------|-------------------------------------------------------------------------|
 | `route_and_complete`  | Picks a model by the `taskType` parameter and completes the prompt. Uses the fallback model when needed. Optional `maxTokens` (integer 1-4096; a larger value is rejected). |
-| `list_models`         | Lists the task types in `config.yaml` and the models attached to them. |
+| `list_models`         | Lists the task types in `config.yaml` and the models available from the server's `/models` endpoint (cached; optional `refresh` bypasses the cache; unreleased, see the limitations below). |
 | `get_usage`           | Returns the state of usage and budget from LiteLLM/OpenRouter.         |
 | `run_eval`            | Runs a JSON prompt set across several models and reports cost/latency/quality. |
 
@@ -662,8 +662,13 @@ CONFIG_PATH=$PWD/config.example.yaml npx @tonyweckstrom/mcp-doctor --env CONFIG_
   clients (`get_usage` shows it).
 - The input token count is an estimate (character count / 3); the reservation
   is corrected to the actual `usage` value only after the call.
-- There is no automatic model list fetch from LiteLLM's `/models` API -
-  `list_models` reads only `config.yaml`.
+- `list_models` fetches the available models from the server's `/models`
+  endpoint (unreleased, see the [CHANGELOG](CHANGELOG.md)). The result is
+  cached (`provider.modelsCacheTtlMs`, default 60 s) and the request times
+  out after `provider.modelsTimeoutMs` (default 10 s), so a call can wait up
+  to that long. If the fetch fails, the tool shows only the models from
+  `config.yaml` and reports the error (type and HTTP status only); the shown
+  models may then differ from the server's real list.
 - The eval price estimate is based on the `eval.pricing` price list in
   `config.yaml`, not on automatic price lookup from OpenRouter.
 - `get_usage` requires that LiteLLM has been started with a database
