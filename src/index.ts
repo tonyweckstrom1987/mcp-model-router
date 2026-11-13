@@ -4,15 +4,17 @@ import { createServer } from "./server/createServer.js";
 import { startStdioTransport } from "./transport/stdio.js";
 import { startHttpTransport } from "./transport/http.js";
 import { Db } from "./lib/db.js";
+import { InvalidEnvError, parseHttpPort } from "./transport/port.js";
 
 async function main(): Promise<void> {
+  const transportKind = (process.env.MCP_TRANSPORT ?? "stdio").toLowerCase();
+  // Portti tarkistetaan ennen asetusten latausta ja tietokannan avausta.
+  const port = transportKind === "http" ? parseHttpPort(process.env.MCP_HTTP_PORT) : undefined;
   const config = loadConfig();
   const db = new Db(config.database.path);
-  const transportKind = (process.env.MCP_TRANSPORT ?? "stdio").toLowerCase();
 
-  if (transportKind === "http") {
+  if (transportKind === "http" && port !== undefined) {
     const host = process.env.MCP_HTTP_HOST ?? "127.0.0.1";
-    const port = Number.parseInt(process.env.MCP_HTTP_PORT ?? "3100", 10);
     const allowedHosts = process.env.MCP_ALLOWED_HOSTS?.split(",").map((h) => h.trim()).filter(Boolean);
     startHttpTransport(() => createServer(config, db), { host, port, allowedHosts, authToken: process.env.MCP_AUTH_TOKEN });
   } else if (transportKind === "stdio") {
@@ -24,7 +26,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  if (err instanceof ConfigNotFoundError) {
+  if (err instanceof ConfigNotFoundError || err instanceof InvalidEnvError) {
     console.error(`mcp-model-router: ${err.message}`);
     process.exitCode = 1;
     return;

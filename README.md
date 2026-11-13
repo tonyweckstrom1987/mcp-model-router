@@ -149,7 +149,7 @@ Environment variables (example values, no secrets in the repository):
 | `DB_PATH`           | Path to the SQLite file                                        | `./data/mcp-model-router.sqlite` |
 | `MCP_TRANSPORT`     | `stdio` or `http`                                              | `stdio`                    |
 | `MCP_HTTP_HOST`     | Bind address of the HTTP transport                              | `127.0.0.1`                |
-| `MCP_HTTP_PORT`     | Port of the HTTP transport (default changed to 3100 because 3000 is often taken, e.g. by Open WebUI) | `3100`                     |
+| `MCP_HTTP_PORT`     | Port of the HTTP transport, an integer 1–65535 (default changed to 3100 because 3000 is often taken, e.g. by Open WebUI). An invalid value such as `0` or `3100abc` stops startup with exit code 1 | `3100`                     |
 | `MCP_AUTH_TOKEN`    | **Required in HTTP mode**: Bearer token for the `/mcp` endpoint, at least 32 characters. The server does not start without it | (not set) |
 | `EVAL_DIR`          | The only directory `run_eval` reads prompt files from (`.json` only). Without it `run_eval` refuses | (not set) |
 | `MCP_ALLOWED_HOSTS` | Comma-separated list of allowed Host headers (DNS rebinding protection) | (not set)      |

@@ -5,6 +5,9 @@ Kaikki merkittävät muutokset kirjataan tähän tiedostoon. Muoto noudattaa
 
 ## [Unreleased]
 
+### Korjattu
+- HTTP-tila: `MCP_HTTP_PORT` jäsennetään tiukasti (kokonaisluku 1–65535). Aiemmin `parseInt` hyväksyi arvon `3100abc` (→ 3100) ja `0`, jolloin palvelin kuunteli käyttöjärjestelmän satunnaisessa portissa ja loki näytti osoitteen `:0`, eikä yksikään asiakas löytänyt palvelua; `abc` kaatui Noden pinojälkeen. Nyt virheellinen arvo pysäyttää käynnistyksen koodilla 1 selkeällä viestillä ennen asetusten latausta ja tietokannan avausta. Tyhjä arvo tarkoittaa oletusporttia 3100.
+
 ## [0.1.2] - julkaisupäivä täydennetään
 
 ### Lisätty
