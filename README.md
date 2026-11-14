@@ -204,6 +204,8 @@ eval:
     enabled: false
     model: openrouter/openai/gpt-4o-mini   # a different model than the models under evaluation, see below
   concurrency: 4   # how many (model, prompt) calls run at the same time
+  # run_eval accepts only the models of the tasks section by default; add other models to compare here:
+  # allowedModels: [openrouter/anthropic/claude-haiku-5-5]
   pricing:
     openrouter/deepseek/deepseek-v4.1-flash:
       inputPerMillionUsd: 0.2
@@ -318,8 +320,11 @@ curl -s -X POST http://127.0.0.1:3100/mcp \
   [Security](#security)); a path outside the directory is rejected.
 - The `models` list uses the same LiteLLM `model_name` aliases as the
   `tasks` block of `config.yaml` (see [Known
-  limitations](#known-limitations)) - it does not have to be the same model as
-  the default model of any `taskType`.
+  limitations](#known-limitations)). Each model must be allowed: either it
+  appears in the `tasks` section (`model` or `fallbackModel`, of any
+  `taskType`) or it is listed in `eval.allowedModels`. A model outside both is
+  rejected before any call is made. To compare a model that no task uses, add
+  it to `eval.allowedModels`. The same model may not appear twice in the list.
 - The `judge` parameter (optional) overrides the `eval.judge.enabled` setting
   of `config.yaml` for a single run. When the judge is on, every response is
   additionally sent to `eval.judge.model` to be rated on a scale of 1-5
