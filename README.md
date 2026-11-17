@@ -434,7 +434,7 @@ eval:
   judge:
     enabled: true
     model: openrouter/openai/gpt-4o-mini   # the model acting as judge
-    systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
+    systemPrompt: "You are a strict evaluator. Rate the quality of the answer on a scale of 1-5 and reply with the number only."
 ```
 
 or pass `"judge": true` in the `arguments` field of the `run_eval` call (see
