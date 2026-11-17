@@ -1,99 +1,98 @@
-# mcp-model-router - esimerkkiasetukset
+# mcp-model-router - example configuration
 #
-# Kopioi tämä tiedosto nimelle config.yaml ja muokkaa tarpeen mukaan.
-# Tiedostossa ei ole salaisuuksia: avaimet luetaan ${MUUTTUJA}-viittauksilla
-# ympäristömuuttujista käynnistyshetkellä. ${MUUTTUJA:-oletus}-muoto asettaa
-# oletusarvon, jos muuttujaa ei ole asetettu.
+# Copy this file to config.yaml and edit it as needed.
+# The file holds no secrets: keys are read from environment variables at
+# startup through ${VARIABLE} references. The ${VARIABLE:-default} form sets a
+# default value when the variable is not set.
 
 server:
   name: mcp-model-router
   version: "0.1.2"
 
-# OpenAI-yhteensopiva rajapinta, jota kaikki mallikutsut käyttävät.
-# Osoita tämä LiteLLM-proxyyn (suositus) tai suoraan OpenRouteriin.
-# Ei koskaan suoria Anthropic-kutsuja - reititin puhuu vain tälle yhdelle
-# OpenAI-yhteensopivalle rajapinnalle.
+# The OpenAI-compatible API that every model call goes through.
+# Point it at a LiteLLM proxy (recommended) or directly at OpenRouter.
+# There are never direct Anthropic calls - the router talks only to this one
+# OpenAI-compatible API.
 #
-# provider.kind kertoo, miten alla olevien tasks-lohkon mallitunnisteet
-# tulkitaan:
-#   - "litellm" (oletus): baseUrl osoittaa LiteLLM-proxyyn. Mallitunniste
-#     lähetetään sellaisenaan, esim. "openrouter/deepseek/deepseek-v4.1-flash"
-#     - "openrouter/"-etuliite on LiteLLM:n oma tapa kertoa, että pyyntö
-#     reititetään OpenRouterin kautta.
-#   - "openrouter": baseUrl osoittaa suoraan OpenRouteriin
-#     (https://openrouter.ai/api/v1). OpenRouterin oma API ei tunne
-#     "openrouter/"-etuliitettä, joten reititin karsii sen automaattisesti
-#     ennen kutsua (ks. src/lib/modelId.ts) - tasks-lohkon mallitunnisteet
-#     voi siis kirjoittaa aina samassa "openrouter/vendor/malli"-muodossa
-#     riippumatta kummasta rajapinnasta on kyse, ja config pysyy siirrettävänä
-#     LiteLLM:n ja suoran OpenRouterin välillä.
+# provider.kind tells how the model IDs in the tasks section below are
+# interpreted:
+#   - "litellm" (default): baseUrl points at a LiteLLM proxy. The model ID is
+#     sent as is, e.g. "openrouter/deepseek/deepseek-v4.1-flash"
+#     - the "openrouter/" prefix is LiteLLM's own way of saying that the
+#     request is routed through OpenRouter.
+#   - "openrouter": baseUrl points directly at OpenRouter
+#     (https://openrouter.ai/api/v1). OpenRouter's own API does not know the
+#     "openrouter/" prefix, so the router strips it automatically before the
+#     call (see src/lib/modelId.ts). You can therefore always write the model
+#     IDs in the tasks section in the same "openrouter/vendor/model" form,
+#     whichever API is used, and the config stays portable between LiteLLM
+#     and direct OpenRouter.
 provider:
   baseUrl: ${LLM_BASE_URL:-http://localhost:4000}
   apiKey: ${LLM_API_KEY:-}
   timeoutMs: 60000
   kind: ${LLM_PROVIDER_KIND:-litellm} # litellm | openrouter
 
-# Tehtävätyyppi -> malli. Jokainen tehtävätyyppi voi määritellä varamallin,
-# jota käytetään jos päämalli epäonnistuu. Alla olevat mallitunnisteet ovat
-# esimerkkejä - tarkista tarkat, ajantasaiset tunnisteet omasta LiteLLM- tai
-# OpenRouter-mallilistastasi.
+# Task type -> model. Each task type can define a fallback model that is used
+# if the primary model fails. The model IDs below are examples - check the
+# exact, current IDs in your own LiteLLM or OpenRouter model list (the
+# list_models tool shows what your server offers).
 tasks:
   general:
     model: openrouter/deepseek/deepseek-v4.1-flash
     fallbackModel: openrouter/qwen/qwen3-flash
-    systemPrompt: "Olet avulias yleiskäyttöinen assistentti."
+    systemPrompt: "You are a helpful general-purpose assistant."
 
   code:
     model: openrouter/qwen/qwen3-coder
     fallbackModel: openrouter/deepseek/deepseek-v4.1-flash
-    systemPrompt: "Olet kokenut ohjelmistokehittäjä. Vastaa täsmällisesti ja perustele ratkaisut lyhyesti."
+    systemPrompt: "You are an experienced software developer. Answer precisely and justify your solutions briefly."
 
   writing:
     model: openrouter/anthropic/claude-3.5-sonnet
     fallbackModel: openrouter/openai/gpt-4o-mini
-    systemPrompt: "Olet taitava kirjoittaja ja editoija."
+    systemPrompt: "You are a skilled writer and editor."
 
   orchestration:
     model: openrouter/openai/gpt-4o
     fallbackModel: openrouter/anthropic/claude-3.5-sonnet
-    systemPrompt: "Olet agenttien orkestroija: pilko tehtävä osiin ja delegoi selkeästi."
-    # Valinnainen tehtävätyyppikohtainen aikakatkaisu (ms), joka ohittaa
-    # provider.timeoutMs:n vain tälle tehtävätyypille. Hyödyllinen
-    # esim. päättelymalleille, jotka voivat kestää kauemmin
-    # pilkkomis-/orkestrointitehtävissä kuin provider-tason
-    # oletusaikakatkaisu (60000 ms) sallii.
+    systemPrompt: "You orchestrate agents: split the task into parts and delegate clearly."
+    # Optional per-task-type timeout (ms) that overrides provider.timeoutMs
+    # for this task type only. Useful e.g. for reasoning models, which can
+    # take longer on splitting/orchestration tasks than the provider-level
+    # default timeout (60000 ms) allows.
     timeoutMs: 120000
 
-# Kulutuksen ja budjetin luku - ei omaa kirjanpitoa, luetaan suoraan
-# LiteLLM:n tai OpenRouterin rajapinnasta.
+# Usage and budget - no bookkeeping of its own, read straight from the
+# LiteLLM or OpenRouter API.
 usage:
   provider: litellm # litellm | openrouter
   baseUrl: ${USAGE_BASE_URL:-http://localhost:4000}
   apiKey: ${USAGE_API_KEY:-}
-  # timeoutMs: 15000 # kulutusrajapinnan aikakatkaisu (oletus 15 s)
+  # timeoutMs: 15000 # usage API timeout (default 15 s)
 
-# run_eval-työkalun asetukset.
+# Settings for the run_eval tool.
 eval:
   judge:
     enabled: false
-    # Huom: valitse tuomarimalliksi eri malli kuin ne, joita run_eval
-    # arvioi. Malli suosii tyypillisesti omaa vastaustyyliään, joten samalla
-    # mallilla tuomarina pisteet vinoutuisivat sitä itseään suosiviksi.
+    # Note: pick a judge model that differs from the models run_eval
+    # evaluates. A model typically favours its own answer style, so using
+    # the same model as judge would bias the scores in its own favour.
     model: openrouter/openai/gpt-4o-mini
-    systemPrompt: "Olet tiukka arvioija. Anna vastauksen laadulle asteikolla 1-5 pelkkä numero."
-    # Tuomarikutsun max_tokens (oletus 64). Nosta, jos tuomari on päättelymalli.
+    systemPrompt: "You are a strict evaluator. Rate the quality of the answer on a scale of 1-5 and reply with the number only."
+    # max_tokens for the judge call (default 64). Raise it if the judge is a reasoning model.
     # maxTokens: 64
-  # Montako (malli, prompt) -kutsua run_eval ajaa samanaikaisesti.
-  # Oletus 4. Nostaa läpimenoa isoilla prompt-sarjoilla, koska kutsut
-  # odottavat pääosin verkkovastausta - liian suuri arvo voi kuitenkin
-  # ylikuormittaa LiteLLM-proxyn tai OpenRouterin rate limitit.
+  # How many (model, prompt) calls run_eval runs at the same time.
+  # Default 4. Raises throughput on large prompt sets, because the calls
+  # mostly wait for the network - but too large a value can overload the
+  # LiteLLM proxy or hit OpenRouter's rate limits.
   concurrency: 4
-  # run_eval sallii oletuksena vain tasks-osion mallit (model, fallbackModel).
-  # Lisää tähän muut vertailtavat mallit:
+  # By default run_eval allows only the models in the tasks section (model,
+  # fallbackModel). Add other models to compare here:
   # allowedModels: [openrouter/anthropic/claude-haiku-5-5]
-  # Valinnainen hinnasto $/miljoona tokenia eval-raportin hinta-arviota
-  # varten (LiteLLM/OpenRouter näyttävät jo toteutuneen kulutuksen -
-  # tämä on vain vertailua varten eval-ajon sisällä).
+  # Optional price list in $ per million tokens for the eval report's cost
+  # estimate (LiteLLM/OpenRouter already show the actual spend - this is
+  # only for comparison inside an eval run).
   pricing:
     openrouter/deepseek/deepseek-v4.1-flash:
       inputPerMillionUsd: 0.2
@@ -105,6 +104,6 @@ eval:
       inputPerMillionUsd: 3.0
       outputPerMillionUsd: 15.0
 
-# SQLite vain kutsulokille ja eval-tuloksille - ei kulutuksen kirjanpitoa.
+# SQLite only for the call log and eval results - no usage bookkeeping.
 database:
   path: ${DB_PATH:-./data/mcp-model-router.sqlite}

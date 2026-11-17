@@ -13,6 +13,7 @@ Kaikki merkittävät muutokset kirjataan tähän tiedostoon. Muoto noudattaa
 - README: englanninkielinen osio "Quick start from npm" (asennus, `config.example.yaml`:n kopiointi paketista ja käynnistys `CONFIG_PATH`:lla) (0f1f917, #49).
 
 ### Muutettu
+- `config.example.yaml` on englanniksi kuten README: kommentit ja esimerkkien järjestelmäkehotteet (`systemPrompt`) sekä tuomarin kehote. npm-pikaohje kopioi tiedoston sellaisenaan, joten englanninkielinen käyttäjä sai aiemmin suomenkieliset kehotteet malleille. Asetusarvot ennallaan (tarkistettu jäsentämällä vanha ja uusi tiedosto). Uusi testi `test/config-example.test.ts` varmistaa, että esimerkki latautuu ja pysyy englanninkielisenä.
 - Puuttuvan asetustiedoston virhe on englanniksi, kertoo absoluuttisen polun ja korjauksen eikä tulosta pinojälkeä. Poistumiskoodi on edelleen 1 (0f1f917, #49).
 
 ### Korjattu
