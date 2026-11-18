@@ -18,7 +18,7 @@ describe("examples/routing-demo (e2e over MCP stdio)", () => {
     expect(summary.tools).toEqual(expect.arrayContaining(["route_and_complete", "list_models", "get_usage", "run_eval"]));
     // list_models reads the fake provider's /models endpoint.
     expect(summary.listModels).toContain("demo/coder");
-    expect(summary.listModels).toContain("(litellm /models, 3 kpl)");
+    expect(summary.listModels).toContain("(litellm /models, 3)");
 
     const byTask = Object.fromEntries(summary.calls.map((c: { taskType: string }) => [c.taskType, c]));
     expect(byTask.general).toMatchObject({ isError: false, modelsTried: ["demo/fast-cheap"], usedFallback: false });

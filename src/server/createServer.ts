@@ -26,33 +26,33 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
   server.registerTool(
     "route_and_complete",
     {
-      title: "Reititä ja täydennä",
+      title: "Route and complete",
       description:
-        "Valitsee mallin tehtävätyypin mukaan config.yaml:sta ja kutsuu sitä OpenAI-yhteensopivan rajapinnan " +
-        "(LiteLLM-proxy tai OpenRouter) kautta. Käyttää varamallia, jos päämalli epäonnistuu.",
+        "Picks a model for the task type from config.yaml and calls it through an OpenAI-compatible API " +
+        "(LiteLLM proxy or OpenRouter). Uses the fallback model if the primary model fails.",
       inputSchema: {
         taskType: z
           .string()
           .min(1)
-          .describe("Tehtävätyyppi config.yaml:n 'tasks'-avainten mukaan, esim. 'general', 'code', 'writing' tai 'orchestration'"),
-        prompt: z.string().min(1).describe("Käyttäjäviesti/promptti mallille"),
-        systemPrompt: z.string().optional().describe("Valinnainen järjestelmäpromptti, ohittaa config.yaml:n oletuksen"),
-        temperature: z.number().min(0).max(2).optional().describe("Valinnainen temperature-parametri"),
-        maxTokens: z.number().int().positive().optional().describe("Valinnainen max_tokens-yläraja vastaukselle"),
+          .describe("Task type, one of the 'tasks' keys in config.yaml, e.g. 'general', 'code', 'writing' or 'orchestration'"),
+        prompt: z.string().min(1).describe("User message (prompt) for the model"),
+        systemPrompt: z.string().optional().describe("Optional system prompt; overrides the default from config.yaml"),
+        temperature: z.number().min(0).max(2).optional().describe("Optional temperature"),
+        maxTokens: z.number().int().positive().optional().describe("Optional max_tokens limit for the answer"),
       },
     },
     async (input) => {
       try {
         const result = await routeAndComplete(config, input, db);
         const metaLines = [
-          `malli: ${result.modelUsed}${result.usedFallback ? " (varamalli käytössä)" : ""}`,
-          `viive: ${result.latencyMs} ms`,
+          `model: ${result.modelUsed}${result.usedFallback ? " (fallback used)" : ""}`,
+          `latency: ${result.latencyMs} ms`,
         ];
         if (result.usage?.totalTokens !== undefined) {
-          metaLines.push(`tokenit: ${result.usage.totalTokens}`);
+          metaLines.push(`tokens: ${result.usage.totalTokens}`);
         }
         if (result.primaryError) {
-          metaLines.push(`päämallin virhe: ${result.primaryError}`);
+          metaLines.push(`primary model error: ${result.primaryError}`);
         }
         return {
           content: [
@@ -63,7 +63,7 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
       } catch (err) {
         return {
           isError: true,
-          content: [{ type: "text" as const, text: `route_and_complete epäonnistui: ${errorMessage(err)}` }],
+          content: [{ type: "text" as const, text: `route_and_complete failed: ${errorMessage(err)}` }],
         };
       }
     },
@@ -72,13 +72,13 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
   server.registerTool(
     "list_models",
     {
-      title: "Listaa mallit",
+      title: "List models",
       description:
-        "Listaa config.yaml:n tehtävätyypit pää- ja varamalleineen sekä palvelimen /models-rajapinnasta haetut " +
-        "oikeasti saatavilla olevat mallit (välimuisti). Jos haku epäonnistuu, näytetään vain config.yaml ja virhe.",
+        "Lists the task types in config.yaml with their primary and fallback models, and the models the server " +
+        "really offers according to its /models endpoint (cached). If the fetch fails, shows only config.yaml and the error.",
       inputSchema: {
-        taskType: z.string().optional().describe("Valinnainen suodatin: näytä vain tämän tehtävätyypin reititys"),
-        refresh: z.boolean().optional().describe("Ohita välimuisti ja hae mallilista uudelleen (oletus false)"),
+        taskType: z.string().optional().describe("Optional filter: show only the routing for this task type"),
+        refresh: z.boolean().optional().describe("Skip the cache and fetch the model list again (default false)"),
       },
     },
     async ({ taskType, refresh }) => {
@@ -86,7 +86,7 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
       if (entries.length === 0) {
         return {
           isError: true,
-          content: [{ type: "text" as const, text: `Tehtävätyyppiä '${taskType}' ei löydy config.yaml:sta.` }],
+          content: [{ type: "text" as const, text: `Task type '${taskType}' not found in config.yaml.` }],
         };
       }
 
@@ -102,22 +102,22 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
 
       const lines = entries.map(([task, route]) => {
         const notes = [
-          missing(route.model) ? `päämalli ei ole palvelimen listalla` : "",
-          route.fallbackModel && missing(route.fallbackModel) ? `varamalli ei ole palvelimen listalla` : "",
+          missing(route.model) ? `primary model is not in the server's list` : "",
+          route.fallbackModel && missing(route.fallbackModel) ? `fallback model is not in the server's list` : "",
         ].filter(Boolean);
         return (
-          `- ${task}: ${route.model}${route.fallbackModel ? ` (varamalli: ${route.fallbackModel})` : ""}` +
-          (notes.length ? ` [VAROITUS: ${notes.join(", ")}]` : "")
+          `- ${task}: ${route.model}${route.fallbackModel ? ` (fallback: ${route.fallbackModel})` : ""}` +
+          (notes.length ? ` [WARNING: ${notes.join(", ")}]` : "")
         );
       });
-      const text = [`Tehtävätyypeittäin määritellyt mallit (config.yaml):\n${lines.join("\n")}`];
+      const text = [`Models per task type (config.yaml):\n${lines.join("\n")}`];
       if (available) {
         text.push(
-          `\nSaatavilla olevat mallit (${config.provider.kind} /models, ${available.ids.length} kpl${available.cached ? ", välimuistista" : ""}):\n` +
-            (available.ids.length ? available.ids.map((id) => `- ${id}`).join("\n") : "(lista on tyhjä)"),
+          `\nAvailable models (${config.provider.kind} /models, ${available.ids.length}${available.cached ? ", cached" : ""}):\n` +
+            (available.ids.length ? available.ids.map((id) => `- ${id}`).join("\n") : "(the list is empty)"),
         );
       } else {
-        text.push(`\nVAROITUS: ${fetchError}. Näytetään vain config.yaml:n mallit; ne voivat olla muuta kuin palvelimella oikeasti saatavilla.`);
+        text.push(`\nWARNING: ${fetchError}. Showing only the models from config.yaml; they may differ from what the server really offers.`);
       }
       return {
         content: [{ type: "text" as const, text: text.join("\n") }],
@@ -133,12 +133,12 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
   server.registerTool(
     "get_usage",
     {
-      title: "Näytä kulutus ja budjetti",
+      title: "Show usage and budget",
       description:
-        "Lukee kulutuksen ja budjetin tilan LiteLLM:n tai OpenRouterin rajapinnasta (config.yaml: usage.provider). " +
-        "Ei omaa kirjanpitoa kulutukselle.",
+        "Reads spend and budget from the LiteLLM or OpenRouter API (config.yaml: usage.provider). " +
+        "Keeps no spend ledger of its own.",
       inputSchema: {
-        includeRaw: z.boolean().optional().describe("Sisällytä rajapinnan raaka JSON-vastaus tulokseen (oletus false)"),
+        includeRaw: z.boolean().optional().describe("Include the raw JSON response from the API (default false)"),
       },
     },
     async ({ includeRaw }) => {
@@ -146,20 +146,20 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
         const snapshot = await fetchUsage(config.usage);
         const s = snapshot.summary;
         const lines = [
-          `lähde: ${snapshot.provider}`,
-          `kulutus: ${s.spendUsd === null ? "ei saatavilla" : `${s.spendUsd.toFixed(4)} USD`}`,
-          `budjetti: ${s.budgetUsd === null ? "ei saatavilla" : `${s.budgetUsd.toFixed(4)} USD`}`,
-          `jäljellä: ${s.remainingUsd === null ? "ei saatavilla" : `${s.remainingUsd.toFixed(4)} USD`}`,
+          `source: ${snapshot.provider}`,
+          `spend: ${s.spendUsd === null ? "not available" : `${s.spendUsd.toFixed(4)} USD`}`,
+          `budget: ${s.budgetUsd === null ? "not available" : `${s.budgetUsd.toFixed(4)} USD`}`,
+          `remaining: ${s.remainingUsd === null ? "not available" : `${s.remainingUsd.toFixed(4)} USD`}`,
         ];
         return {
           content: [
             { type: "text" as const, text: lines.join("\n") },
-            ...(includeRaw ? [{ type: "text" as const, text: `\nraaka vastaus:\n${JSON.stringify(snapshot.raw, null, 2)}` }] : []),
+            ...(includeRaw ? [{ type: "text" as const, text: `\nraw response:\n${JSON.stringify(snapshot.raw, null, 2)}` }] : []),
           ],
           structuredContent: { provider: snapshot.provider, summary: snapshot.summary },
         };
       } catch (err) {
-        return { isError: true, content: [{ type: "text" as const, text: `get_usage epäonnistui: ${errorMessage(err)}` }] };
+        return { isError: true, content: [{ type: "text" as const, text: `get_usage failed: ${errorMessage(err)}` }] };
       }
     },
   );
@@ -167,14 +167,14 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
   server.registerTool(
     "run_eval",
     {
-      title: "Aja mallivertailu",
+      title: "Run model comparison",
       description:
-        "Ajaa saman prompt-sarjan (JSON-tiedosto) usealla mallilla ja raportoi hinnan, viiveen ja vastauksen " +
-        "rinnakkain. Laatu arvioidaan sisältää-tarkistuksella ja valinnaisella LLM-tuomarilla.",
+        "Runs the same prompt set (a JSON file) on several models and reports price, latency and answer " +
+        "side by side. Quality is scored with a contains check and an optional LLM judge.",
       inputSchema: {
-        promptSetPath: z.string().min(1).describe("Polku JSON-tiedostoon: taulukko { id, prompt, systemPrompt?, expectedContains? }"),
-        models: z.array(z.string().min(1)).min(1).describe("Vertailtavien mallien tunnisteet OpenAI-yhteensopivassa rajapinnassa"),
-        judge: z.boolean().optional().describe("Ohita config.yaml:n eval.judge.enabled-asetus tälle ajolle"),
+        promptSetPath: z.string().min(1).describe("Path to a JSON file: an array of { id, prompt, systemPrompt?, expectedContains? }"),
+        models: z.array(z.string().min(1)).min(1).describe("Model ids to compare, as named in the OpenAI-compatible API"),
+        judge: z.boolean().optional().describe("Override config.yaml eval.judge.enabled for this run"),
       },
     },
     async (input) => {
@@ -183,12 +183,12 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
         const summaryLines = report.perModel.map((m) => {
           const parts = [
             `${m.model}:`,
-            `viive ka. ${m.avgLatencyMs.toFixed(0)} ms`,
-            m.passRate !== null ? `läpäisy ${(m.passRate * 100).toFixed(0)}%` : null,
-            m.avgJudgeScore !== null ? `tuomari ka. ${m.avgJudgeScore.toFixed(2)}/5` : null,
-            m.judgeErrorCount > 0 ? `tuomaripiste puuttuu ${m.judgeErrorCount}/${m.caseCount}` : null,
-            m.avgPriceUsd !== null ? `hinta ka. ${m.avgPriceUsd.toFixed(6)} USD` : null,
-            m.errorCount > 0 ? `virheitä ${m.errorCount}/${m.caseCount}` : null,
+            `avg latency ${m.avgLatencyMs.toFixed(0)} ms`,
+            m.passRate !== null ? `pass ${(m.passRate * 100).toFixed(0)}%` : null,
+            m.avgJudgeScore !== null ? `avg judge ${m.avgJudgeScore.toFixed(2)}/5` : null,
+            m.judgeErrorCount > 0 ? `judge score missing ${m.judgeErrorCount}/${m.caseCount}` : null,
+            m.avgPriceUsd !== null ? `avg price ${m.avgPriceUsd.toFixed(6)} USD` : null,
+            m.errorCount > 0 ? `errors ${m.errorCount}/${m.caseCount}` : null,
           ].filter(Boolean);
           return `- ${parts.join(" | ")}`;
         });
@@ -196,12 +196,12 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
         const taskTypeLines = report.perTaskType.map((t) => {
           const parts = [
             `${t.taskType} / ${t.model}:`,
-            `läpäisty ${t.passedCount}/${t.expectedCount}`,
-            `virheitä ${t.errorCount}/${t.caseCount}`,
-            `viive ka. ${t.avgLatencyMs.toFixed(0)} ms`,
-            t.avgPriceUsd !== null ? `hinta ka. ${t.avgPriceUsd.toFixed(6)} USD` : null,
-            t.passRateIncludingErrors !== null ? `läpäisy% (virheet mukana) ${(t.passRateIncludingErrors * 100).toFixed(0)}%` : null,
-            t.passRateExcludingErrors !== null ? `läpäisy% (virheet pois) ${(t.passRateExcludingErrors * 100).toFixed(0)}%` : null,
+            `passed ${t.passedCount}/${t.expectedCount}`,
+            `errors ${t.errorCount}/${t.caseCount}`,
+            `avg latency ${t.avgLatencyMs.toFixed(0)} ms`,
+            t.avgPriceUsd !== null ? `avg price ${t.avgPriceUsd.toFixed(6)} USD` : null,
+            t.passRateIncludingErrors !== null ? `pass% (errors included) ${(t.passRateIncludingErrors * 100).toFixed(0)}%` : null,
+            t.passRateExcludingErrors !== null ? `pass% (errors excluded) ${(t.passRateExcludingErrors * 100).toFixed(0)}%` : null,
           ].filter(Boolean);
           return `- ${parts.join(" | ")}`;
         });
@@ -211,10 +211,10 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
             {
               type: "text" as const,
               text: [
-                `Eval-ajo ${report.runId} (${report.cases.length} vastausta, tuomari ${report.judgeUsed ? "käytössä" : "pois päältä"}):`,
+                `Eval run ${report.runId} (${report.cases.length} answers, judge ${report.judgeUsed ? "on" : "off"}):`,
                 summaryLines.join("\n"),
                 "",
-                "Tehtävätyypeittäin:",
+                "Per task type:",
                 taskTypeLines.join("\n"),
               ].join("\n"),
             },
@@ -222,7 +222,7 @@ export function createServer(config: AppConfig, db?: Db): McpServer {
           structuredContent: report as unknown as Record<string, unknown>,
         };
       } catch (err) {
-        return { isError: true, content: [{ type: "text" as const, text: `run_eval epäonnistui: ${errorMessage(err)}` }] };
+        return { isError: true, content: [{ type: "text" as const, text: `run_eval failed: ${errorMessage(err)}` }] };
       }
     },
   );

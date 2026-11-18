@@ -115,10 +115,10 @@ describe("mallilista /models-rajapinnasta", () => {
       models(["deepseek-flash", "qwen-coder", "muu"]);
       const res = await call(makeConfig());
       const text = res.content[0].text;
-      expect(text).toContain("Saatavilla olevat mallit");
+      expect(text).toContain("Available models");
       expect(text).toContain("- muu");
-      expect(text).toMatch(/general: deepseek-flash \(varamalli: vanha-malli\) \[VAROITUS: varamalli ei ole/);
-      expect(text).not.toMatch(/code: qwen-coder.*VAROITUS/);
+      expect(text).toMatch(/general: deepseek-flash \(fallback: vanha-malli\) \[WARNING: fallback model is not/);
+      expect(text).not.toMatch(/code: qwen-coder.*WARNING/);
       expect(res.structuredContent.available.models).toEqual(["deepseek-flash", "muu", "qwen-coder"]);
       expect(res.structuredContent.availableError).toBeNull();
     });
@@ -128,7 +128,7 @@ describe("mallilista /models-rajapinnasta", () => {
       const res = await call(makeConfig());
       expect(res.isError).toBeFalsy();
       expect(res.content[0].text).toContain("general: deepseek-flash");
-      expect(res.content[0].text).toContain("VAROITUS: mallilistan haku epäonnistui (HTTP 500)");
+      expect(res.content[0].text).toContain("WARNING: model list fetch failed (HTTP 500)");
       expect(res.structuredContent.available).toBeNull();
       expect(res.structuredContent.availableError).toContain("HTTP 500");
       expect(res.content[0].text).not.toContain("litellm.local");

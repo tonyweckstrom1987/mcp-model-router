@@ -80,8 +80,8 @@ export async function runDemo({ fromSource = false } = {}) {
         taskType: req.taskType,
         isError: Boolean(result.isError),
         modelsTried: provider.requests.slice(before),
-        modelUsed: /malli: (\S+)/.exec(meta)?.[1] ?? null,
-        usedFallback: meta.includes("varamalli"),
+        modelUsed: /model: (\S+)/.exec(meta)?.[1] ?? null,
+        usedFallback: meta.includes("(fallback used)"),
         answer: answer.trim(),
       });
     }

@@ -66,10 +66,10 @@ export async function fetchAvailableModels(
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
       throw new ModelsFetchError(`mallilistan haku aikakatkaistiin (${ms} ms)`);
     }
-    throw new ModelsFetchError(`mallilistan haku epäonnistui (${err instanceof Error ? err.name : typeof err})`);
+    throw new ModelsFetchError(`model list fetch failed (${err instanceof Error ? err.name : typeof err})`);
   }
   if (!res.ok) {
-    throw new ModelsFetchError(`mallilistan haku epäonnistui (HTTP ${res.status})`);
+    throw new ModelsFetchError(`model list fetch failed (HTTP ${res.status})`);
   }
 
   let json: unknown;
