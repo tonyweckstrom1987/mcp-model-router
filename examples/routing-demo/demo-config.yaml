@@ -3,7 +3,7 @@
 # LLM_BASE_URL at it, so no real model is called and no API key is needed.
 server:
   name: mcp-model-router
-  version: "0.1.2"
+  version: "0.2.0"
 
 provider:
   baseUrl: ${LLM_BASE_URL:-http://127.0.0.1:9}

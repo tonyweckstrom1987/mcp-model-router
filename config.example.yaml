@@ -7,7 +7,7 @@
 
 server:
   name: mcp-model-router
-  version: "0.1.2"
+  version: "0.2.0"
 
 # The OpenAI-compatible API that every model call goes through.
 # Point it at a LiteLLM proxy (recommended) or directly at OpenRouter.

@@ -317,7 +317,7 @@ tasks:
 | `litellm`                   | `{ "user_info": { ... } }` with only the fields `spend`, `max_budget`, `budget_duration` and `budget_reset_at` (a field appears only if LiteLLM returned it). Everything else in LiteLLM's `/user/info` response, such as `keys[]` metadata (key hash, `key_name`, `key_alias`), `user_id`, `team_id`, teams and `metadata`, is dropped. |
 | `openrouter`                | The unmodified `/credits` response. |
 
-**Breaking change (unreleased):** before, the LiteLLM `raw` was the unmodified `/user/info` response. Code that read `raw.keys`, `raw.teams` or `raw.user_id` now finds nothing; read `summary` instead. Older LiteLLM versions that return `spend` and `max_budget` at the top level are handled: those values are taken from the top level, and a field missing from `user_info` is filled in from there. See the [CHANGELOG](CHANGELOG.md).
+**Breaking change in 0.2.0:** before, the LiteLLM `raw` was the unmodified `/user/info` response. Code that read `raw.keys`, `raw.teams` or `raw.user_id` now finds nothing; read `summary` instead. Older LiteLLM versions that return `spend` and `max_budget` at the top level are handled: those values are taken from the top level, and a field missing from `user_info` is filled in from there. See the [CHANGELOG](CHANGELOG.md).
 
 For the format of the eval prompt file, see the example
 [`examples/eval-prompts.example.json`](./examples/eval-prompts.example.json):

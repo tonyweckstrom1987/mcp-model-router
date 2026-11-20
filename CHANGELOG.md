@@ -5,6 +5,10 @@ All notable changes are recorded in this file. The format follows the
 
 ## [Unreleased]
 
+## [0.2.0] - unreleased
+
+This release contains everything listed below under 0.2.0 and the former 0.1.2 section, which was never published to npm (the latest npm version is 0.1.1). The minor version is raised instead of the patch version because the `get_usage` `raw` output for LiteLLM changed in a breaking way (see Security).
+
 ### Added
 - A runnable routing demo in `examples/routing-demo` with a fake provider: `npm run example` routes tasks through the real router without an API key. An end-to-end test (`test/example.e2e.test.ts`) runs it in CI, and the README has a "Try it in a minute" section (c4eb246, #69).
 
@@ -22,6 +26,7 @@ All notable changes are recorded in this file. The format follows the
 - Tool titles, descriptions, parameter descriptions and the text output of all four tools (`route_and_complete`, `list_models`, `get_usage`, `run_eval`) are in English like the README and `config.example.yaml`. MCP clients and the LLMs behind them read these texts, so an English-speaking user previously got Finnish tool descriptions. `structuredContent` is unchanged (02021f7, #76). The routing demo reads the new `model:` / `(fallback used)` output, and the new test `test/toolText.test.ts` checks that the tool metadata contains no Finnish letters.
 
 ### Other
+- Tests: `test/version.test.ts` checks that `package.json`, `package-lock.json`, the default `server.version`, `config.example.yaml` and the demo config carry the same version, and that the CHANGELOG has a section for it.
 - Tests: 66 more Python tests in `test/test_automerge_lisa.py` for the automerge tool `tools/automerge.py` (fbbd478, #50). They cover added-line extraction, the restricted-path and bot-fork reasons, the reviewer's decision, structural reasons, case evaluation, function lookup, `main` and constants. With them `python -m unittest discover` runs 96 tests.
 - CI: Python tests (`python -m unittest discover`) run on Python versions 3.10-3.13 (55602a1, #60). `__pycache__/` and `*.pyc` added to `.gitignore`.
 - CI: the `mcp-doctor` Action updated from version 0.3.0 to version 0.5.0 (b664ebf, #55).
@@ -29,7 +34,9 @@ All notable changes are recorded in this file. The format follows the
 - Dev dependencies: vite 8.3.6 (32c033d, #56) and 8.3.8 (a77e6b3, #68), vitest 5.1.0 (8aefce2, #57) and undici 7.30.2 (d0284d7, #58).
 - README: the output of the "Try it without a key" example matches the current `list_models` behavior (the `(config.yaml)` heading and a warning line when the `/models` lookup fails). Added an example of a successful lookup and stated the CI `mcp-doctor` version. The commands were run in a clean clone without keys.
 
-## [0.1.2] - unreleased
+## [0.1.2] - not published
+
+This section was prepared for 0.1.2, but 0.1.2 was never published. All of it ships in 0.2.0.
 
 ### Added
 - The README has been fully translated into English (table of contents anchors updated) (0dcf6be, #51). Fixed two claims that contradicted the code: Bearer authentication runs before JSON parsing (the README claimed the opposite), and the interpretation of the measured comparison now matches the table (`qwen3-coder` was slower and more expensive in the general task type, and faster and cheaper in the other types).
@@ -61,4 +68,4 @@ All notable changes are recorded in this file. The format follows the
 - Tests: automerge tests (a4347cd, #33), budget tests (62a919b, #43) and an empty `test/__init__.py` so that the repository's own tests win over a test package with the same name (584807d, #53).
 - README updates (27e6a8e, #35; b3d0f67, #47).
 - Dependencies: express and `@types/express` (e359ea4, #16), `@types/node` 26.6.5 and 26.6.6 (61c3eb4, #10; 1a587ef, #45), vitest 5.0.5 (49b5107, #25), js-yaml 5.5.0 (87d4f26, #27), vite 8.3.5 (ed5edd0, #34), MCP SDK 1.32.2 (27081f7, #46) and evalkit-action (9ac4b39, #24).
-- The server's default version (`server.version`) and `config.example.yaml` raised to version 0.1.2.
+- The server's default version (`server.version`) and `config.example.yaml` raised to version 0.1.2 (0.2.0 in the 0.2.0 release).

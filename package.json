@@ -1,6 +1,6 @@
 {
   "name": "mcp-model-router",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "MCP server that picks a model by task type, shows LiteLLM/OpenRouter spend, and compares models with eval runs. Complements LiteLLM, does not replace it.",
   "license": "MIT",
   "type": "module",
