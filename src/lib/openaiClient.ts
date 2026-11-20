@@ -45,6 +45,19 @@ export function authHeaders(apiKey?: string): Record<string, string> {
   return apiKey ? { authorization: `Bearer ${apiKey}` } : {};
 }
 
+/** A shorter key is not redacted: it would match ordinary text and garble the error message. */
+export const MIN_REDACT_LENGTH = 8;
+
+/**
+ * Redacts the API key from a provider error body before the body goes into an
+ * error message (to the MCP client, the call log and eval results). Redaction
+ * happens before truncation, so no part of the key leaks at the cut point.
+ */
+export function redactSecret(text: string, secret: string | undefined): string {
+  if (!secret || secret.length < MIN_REDACT_LENGTH) return text;
+  return text.split(secret).join("***");
+}
+
 export async function callChatCompletion(opts: CallChatCompletionOptions): Promise<ChatCompletionResult> {
   // 1) Kattotarkistus ennen mitään muuta: liian suurta max_tokensia ei pienennetä hiljaa, vaan kutsu hylätään.
   if (opts.maxTokens !== undefined) {
@@ -85,7 +98,7 @@ export async function callChatCompletion(opts: CallChatCompletionOptions): Promi
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Request to model '${opts.model}' failed (${res.status} ${res.statusText}): ${body.slice(0, 500)}`);
+      throw new Error(`Request to model '${opts.model}' failed (${res.status} ${res.statusText}): ${redactSecret(body, opts.apiKey).slice(0, 500)}`);
     }
 
     const json = (await res.json()) as {
