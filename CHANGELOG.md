@@ -13,6 +13,9 @@ All notable changes are recorded in this file. The format follows the
   - **Breaking:** for the LiteLLM provider, `raw` now always has the shape `{ "user_info": { ... } }` with only those four fields, whatever shape LiteLLM returned. Before, `raw` was the unmodified response, so code that read `raw.keys`, `raw.teams`, `raw.user_id` or other fields now finds nothing. Read `summary` instead. The OpenRouter `raw` is not changed.
   - For older LiteLLM versions that return `spend` and `max_budget` at the top level, those values are taken from the top level, and a field missing from `user_info` is filled in from the top level, so `raw` and `summary` are not left empty (fd5ff60, #74).
 
+### Fixed
+- Daily budget: an empty `usage` in the model response (`{}`, null fields), zeros, or only one of `prompt_tokens` and `completion_tokens` no longer releases the reservation. Before, for example `usage: {}` settled the reservation to zero, so a backend that does not report usage correctly bypassed the hard-coded daily limit. Usage that cannot be inferred reliably is treated like a missing `usage` field: the reservation stays. The limits themselves are unchanged.
+
 ### Changed
 - `run_eval` errors for an unreadable, invalid or malformed prompt file now name the file by base name only: no resolved path, no system error text and no values from the file. Schema errors name only the task position and field (for example `1.id: id is duplicated`); before, the duplicate-id error quoted the id from the file (dc99f30, #73).
 - **Behavior change:** the usage endpoint's response must be a JSON object. A JSON `null`, number, string or array now makes `get_usage` return an error (`... returned an unexpected response: expected a JSON object`). Before, `null` crashed with "Cannot read properties of null", and a number, string or array gave a "not available" result without an error. A caller that relied on that quiet result now sees an error instead (fd5ff60, #74).

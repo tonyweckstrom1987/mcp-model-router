@@ -701,7 +701,9 @@ input estimate + `max_tokens` is reserved from the SQLite `token_budget` table
 in a `BEGIN IMMEDIATE` transaction (the check and the reservation are
 indivisible, so parallel calls cannot bypass the limit). After the call the
 reservation is corrected to the `usage` value of the response. If `usage` is
-missing, the reservation stays in effect. A failed and an empty response
+missing or does not tell the consumption (an empty object, zeros, or only one
+of `prompt_tokens` and `completion_tokens`), the reservation stays in effect.
+A failed and an empty response
 consume budget. Exceeding the budget does not trigger the fallback model.
 Changing the limit requires a code change.
 
@@ -741,8 +743,8 @@ CONFIG_PATH=$PWD/config.example.yaml npx @tonyweckstrom/mcp-doctor --env CONFIG_
   is corrected to the actual `usage` value only after the call.
 - A failed or empty model call is not refunded: the reservation made before
   the call (input estimate + `max_tokens`) stays in the daily budget, and so
-  does the reservation of a successful call whose response has no `usage`
-  field.
+  does the reservation of a successful call whose response has no usable
+  `usage` (missing, empty, zeros or only one of the two token counts).
 - The cost limits (1,000,000 tokens per day, `max_tokens` 4096, 200 calls per
   `run_eval`, the `Europe/Helsinki` day boundary) are constants in
   `src/lib/limits.ts`. They cannot be changed with configuration or an
