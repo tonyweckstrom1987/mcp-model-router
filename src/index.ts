@@ -2,7 +2,7 @@
 import { ConfigNotFoundError, loadConfig } from "./config/load.js";
 import { createServer } from "./server/createServer.js";
 import { startStdioTransport } from "./transport/stdio.js";
-import { startHttpTransport } from "./transport/http.js";
+import { DnsRebindingConfigError, startHttpTransport } from "./transport/http.js";
 import { Db } from "./lib/db.js";
 
 async function main(): Promise<void> {
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  if (err instanceof ConfigNotFoundError) {
+  if (err instanceof ConfigNotFoundError || err instanceof DnsRebindingConfigError) {
     console.error(`mcp-model-router: ${err.message}`);
     process.exitCode = 1;
     return;

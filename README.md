@@ -204,7 +204,7 @@ Environment variables (example values, no secrets in the repository):
 | `MCP_HTTP_PORT`     | Port of the HTTP transport (default changed to 3100 because 3000 is often taken, e.g. by Open WebUI) | `3100`                     |
 | `MCP_AUTH_TOKEN`    | **Required in HTTP mode**: Bearer token for the `/mcp` endpoint, at least 32 characters. The server does not start without it | (not set) |
 | `EVAL_DIR`          | The only directory `run_eval` reads prompt files from (`.json` only). Without it `run_eval` refuses | (not set) |
-| `MCP_ALLOWED_HOSTS` | Comma-separated list of allowed Host headers (DNS rebinding protection) | (not set)      |
+| `MCP_ALLOWED_HOSTS` | Comma-separated list of allowed host names in the Host header, without port (DNS rebinding protection). **Required in HTTP mode when `MCP_HTTP_HOST` is not `127.0.0.1`, `localhost` or `::1`**; the server does not start without it | (not set)      |
 
 ### Running
 
@@ -636,8 +636,10 @@ No Docker - the server runs directly as a Node process under a systemd unit.
 The unit listens on the `MCP_HTTP_HOST` address (set the container's
 Tailscale address, `tailscale ip -4`, in the env file), so that other LXC
 containers can reach the server over the Tailscale network. The env file must
-contain `MCP_AUTH_TOKEN` (at least 32 characters), otherwise the server does
-not start, and clients must send it in the Bearer header. Also set
+contain `MCP_AUTH_TOKEN` (at least 32 characters) and, because the address is
+not localhost, `MCP_ALLOWED_HOSTS` (for example the Tailscale address and the
+MagicDNS name, without port); otherwise the server does not start. Clients must
+send the token in the Bearer header. Also set
 `EVAL_DIR` if you use `run_eval`. Access is additionally restricted with
 Tailscale ACLs.
 
@@ -669,12 +671,17 @@ DELETE) requires the header `Authorization: Bearer <token>`.
   unauthenticated request is not read. A parse error in an authenticated
   request returns the JSON-RPC error `-32700 Parse error`. The DNS rebinding
   protection (Host header check) is applied before that.
-- **Startup warning:** if `MCP_HTTP_HOST` is not a localhost address (`127.0.0.1`,
-  `localhost`, `::1`) and `MCP_ALLOWED_HOSTS` is not set, the server prints
-  `Warning: listening on <host> without DNS rebinding protection; set allowedHosts (MCP_ALLOWED_HOSTS).`
-  to stderr. This covers any other address too, such as a Tailscale IP, not only
-  `0.0.0.0` and `::`. The server still starts: set `MCP_ALLOWED_HOSTS` to the
-  Host values clients use (for example `100.x.y.z:3100`) to enable the check.
+- **DNS rebinding protection is required:** if `MCP_HTTP_HOST` is not a
+  localhost address (`127.0.0.1`, `localhost`, `::1`) and `MCP_ALLOWED_HOSTS`
+  is not set (or is empty), the server **does not start** in HTTP mode. It
+  prints `MCP_HTTP_HOST is <host>, which is not a localhost address ... Set
+  MCP_ALLOWED_HOSTS ...` to stderr and exits with code 1. This covers any
+  address, such as a Tailscale IP, `0.0.0.0` and `::`. Set `MCP_ALLOWED_HOSTS`
+  to the host names clients put in the Host header, comma-separated and without
+  a port, for example `MCP_ALLOWED_HOSTS=100.x.y.z,my-lxc.tailnet-name.ts.net`
+  (an IPv6 address goes in brackets, `[fd7a::1]`). A request with any other
+  Host header gets a 403 before authentication. On a localhost address the
+  server keeps accepting only localhost Host headers, as before.
 
 **`run_eval` file paths (`EVAL_DIR`).** `run_eval` reads prompt files from a
 single directory only.

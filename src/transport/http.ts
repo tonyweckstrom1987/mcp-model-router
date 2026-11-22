@@ -23,6 +23,33 @@ export interface HttpTransportOptions {
   onListenError?: (err: Error) => void;
 }
 
+/** Osoitteet, joilla SDK:n localhostHostValidation riittää DNS rebinding -suojaksi. */
+export const LOCALHOST_HOSTS: readonly string[] = ["127.0.0.1", "localhost", "::1"];
+
+/** Startup error that the CLI prints as a plain message (no stack trace). */
+export class DnsRebindingConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DnsRebindingConfigError";
+  }
+}
+
+/**
+ * Palauttaa sallitut Host-nimet tai undefined, jos riittää localhost-tarkistus.
+ * Tyhjä lista tulkitaan asettamattomaksi. Muu kuin localhost-osoite ilman
+ * sallittuja nimiä heittää DnsRebindingConfigErrorin.
+ */
+export function assertDnsRebindingProtection(host: string, allowedHosts: string[] | undefined): string[] | undefined {
+  if (allowedHosts && allowedHosts.length > 0) return allowedHosts;
+  if (LOCALHOST_HOSTS.includes(host)) return undefined;
+  throw new DnsRebindingConfigError(
+    `MCP_HTTP_HOST is ${host}, which is not a localhost address (127.0.0.1, localhost, ::1), and MCP_ALLOWED_HOSTS is not set. ` +
+      `HTTP mode will not start without DNS rebinding protection. ` +
+      `Set MCP_ALLOWED_HOSTS to the host names clients use in the Host header, comma-separated and without a port ` +
+      `(for example MCP_ALLOWED_HOSTS=100.64.0.10,my-host.tailnet.ts.net), or bind to 127.0.0.1.`,
+  );
+}
+
 /**
  * Käynnistää MCP-palvelimen streamable HTTP -siirtotavan päällä tilattomassa
  * tilassa (yksi transport per pyyntö), jotta useat agenttikontit voivat
@@ -36,16 +63,13 @@ export function startHttpTransport(createServer: () => McpServer, options: HttpT
   // DNS rebinding -suoja kuten SDK:n createMcpExpressAppissa. Omaa sovellusta
   // käytetään, koska createMcpExpressApp asentaa express.json()-jäsentimen
   // sovellustasolle ennen tunnistusta (katselmointi 28.10., löydös 9).
-  const localhostHosts = ["127.0.0.1", "localhost", "::1"];
-  if (options.allowedHosts) {
-    app.use(hostHeaderValidation(options.allowedHosts));
-  } else if (localhostHosts.includes(options.host)) {
-    app.use(localhostHostValidation());
+  // Fail closed: muu kuin localhost-osoite ilman sallittuja Host-nimiä heittää
+  // ennen kuin portti avataan (Tonyn päätös 22.11., A1058).
+  const allowedHosts = assertDnsRebindingProtection(options.host, options.allowedHosts);
+  if (allowedHosts) {
+    app.use(hostHeaderValidation(allowedHosts));
   } else {
-    // Any non-localhost host (0.0.0.0, ::, a Tailscale IP, ...) has no DNS rebinding protection.
-    console.warn(
-      `Warning: listening on ${options.host} without DNS rebinding protection; set allowedHosts (MCP_ALLOWED_HOSTS).`,
-    );
+    app.use(localhostHostValidation());
   }
 
   // Kattaa kaikki /mcp-metodit (POST, GET, DELETE); /healthz jää avoimeksi.

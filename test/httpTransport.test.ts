@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { startHttpTransport } from "../src/transport/http.js";
+import { assertDnsRebindingProtection, DnsRebindingConfigError, startHttpTransport } from "../src/transport/http.js";
 
 const TOKEN = "h".repeat(32) + "-http-transport-test";
 const INIT = {
@@ -124,40 +124,85 @@ describe("HTTP: palvelin ja transport suljetaan kaikilla poluilla (löydös 8)",
   });
 });
 
-describe("HTTP: warning when DNS rebinding protection is off", () => {
-  // Binding to a non-local address fails with EADDRNOTAVAIL; the warning is
-  // printed before listen, so the test only needs the stderr output.
-  function warnings(host: string, allowedHosts?: string[]): string[] {
-    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const server = startHttpTransport(() => new McpServer({ name: "t", version: "0" }), {
+describe("HTTP: DNS rebinding protection is required on non-localhost hosts", () => {
+  const factory = () => new McpServer({ name: "t", version: "0" });
+
+  // Starts the transport and waits for 'listening' or a listen error. A
+  // non-local address may fail with EADDRNOTAVAIL; either way the startup check passed.
+  async function startsOn(host: string, allowedHosts?: string[]): Promise<void> {
+    let listenError: Error | undefined;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = startHttpTransport(factory, {
       host,
       port: 0,
       authToken: TOKEN,
       allowedHosts,
-      onListenError: () => {},
+      onListenError: (e) => {
+        listenError = e;
+      },
     });
-    const lines = spy.mock.calls.map((c) => String(c[0]));
-    spy.mockRestore();
-    server.close();
-    return lines;
+    try {
+      await new Promise<void>((resolve) => {
+        server.once("listening", () => resolve());
+        server.once("error", () => resolve());
+        if (listenError) resolve();
+      });
+    } finally {
+      errSpy.mockRestore();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   }
 
-  it("warns for a Tailscale-style IP without allowedHosts", () => {
-    const lines = warnings("100.64.0.10");
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("100.64.0.10");
-    expect(lines[0]).toContain("MCP_ALLOWED_HOSTS");
+  it("localhost hosts start without MCP_ALLOWED_HOSTS", async () => {
+    await startsOn("127.0.0.1");
+    expect(() => assertDnsRebindingProtection("localhost", undefined)).not.toThrow();
+    expect(() => assertDnsRebindingProtection("::1", undefined)).not.toThrow();
   });
 
-  it("still warns for 0.0.0.0 and ::", () => {
-    expect(warnings("0.0.0.0")).toHaveLength(1);
-    expect(warnings("::")).toHaveLength(1);
+  it("0.0.0.0, :: and a Tailscale-style IP without MCP_ALLOWED_HOSTS throw before listening", () => {
+    for (const host of ["0.0.0.0", "::", "100.64.0.10"]) {
+      expect(() => startHttpTransport(factory, { host, port: 0, authToken: TOKEN })).toThrow(DnsRebindingConfigError);
+    }
+    expect(() => startHttpTransport(factory, { host: "0.0.0.0", port: 0, authToken: TOKEN })).toThrow(
+      /MCP_HTTP_HOST is 0\.0\.0\.0.*MCP_ALLOWED_HOSTS is not set.*Set MCP_ALLOWED_HOSTS/,
+    );
   });
 
-  it("does not warn for localhost hosts or when allowedHosts is set", () => {
-    expect(warnings("127.0.0.1")).toHaveLength(0);
-    expect(warnings("localhost")).toHaveLength(0);
-    expect(warnings("::1")).toHaveLength(0);
-    expect(warnings("100.64.0.10", ["my-lxc.tailnet.ts.net"])).toHaveLength(0);
+  it("an empty allowedHosts list counts as unset", () => {
+    expect(() => startHttpTransport(factory, { host: "0.0.0.0", port: 0, authToken: TOKEN, allowedHosts: [] })).toThrow(
+      DnsRebindingConfigError,
+    );
+    expect(assertDnsRebindingProtection("127.0.0.1", [])).toBeUndefined();
+  });
+
+  it("0.0.0.0 with MCP_ALLOWED_HOSTS starts and rejects a foreign Host header", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const server = startHttpTransport(factory, {
+      host: "0.0.0.0",
+      port: 0,
+      authToken: TOKEN,
+      allowedHosts: ["127.0.0.1"],
+    });
+    try {
+      await new Promise<void>((resolve) => server.once("listening", resolve));
+      const port = (server.address() as AddressInfo).port;
+      const ok = await fetch(`http://127.0.0.1:${port}/healthz`);
+      expect(ok.status).toBe(200);
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = httpRequest(
+          { host: "127.0.0.1", port, path: "/healthz", method: "GET", headers: { host: "evil.example" } },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+      expect(status).toBe(403);
+    } finally {
+      errSpy.mockRestore();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
